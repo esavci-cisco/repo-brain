@@ -55,15 +55,27 @@ Add to your repo's `AGENTS.md`:
 ```markdown
 ## repo-brain
 
-Starting a new task (feature, ticket, bug fix):
-- Call `scope_task(description)` first -- returns affected services, key files, deps, and risks.
+This repo has a repo-brain MCP server with persistent context about the
+codebase architecture, dependencies, and code locations.
 
-Targeted queries:
-- "What is this repo?" -> `get_architecture`
-- "Tell me about service X" -> `get_service_info(service_name)`
-- "What breaks if I change X?" -> `query_dependencies(module)`
-- "Find code that does X" (fuzzy) -> `search_code(query)`
-- Exact names or keywords -> grep/glob (built-in tools are faster)
+Use repo-brain first when you need to understand what's affected, how things
+connect, or where relevant code lives — before launching Explore agents or
+grepping across the codebase:
+
+- `scope_task(description)` — starting any new work, or understanding how
+  a feature/system works across services
+- `get_architecture` — repo structure and service overview
+- `get_service_info(service_name)` — focused context for a known service
+- `query_dependencies(module)` — impact analysis before changing shared code
+- `search_code(query)` — finding code by concept, not by name
+
+Use built-in tools (grep, glob, Read) when:
+- You already know which file or service to look at
+- You need exact keyword or symbol matches
+- You're reading/editing specific files during implementation
+
+One scope_task call at the start of a task replaces minutes of codebase
+exploration. Do not call multiple repo-brain tools preemptively.
 ```
 
 ## MCP Tools
