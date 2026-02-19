@@ -174,6 +174,146 @@ All data lives at `~/.repo-brain/repos/<repo-slug>/`:
     └── gotchas.md         # Known pitfalls
 ```
 
+## Curating Your Docs (Highest ROI Activity)
+
+`repo-brain generate-docs` creates starter docs at `~/.repo-brain/repos/<slug>/docs/`. These are **skeletons** -- auto-generated from scanning pyproject.toml files, compose.yml, and directory structure. They list services with their path, language, and framework, but nothing more.
+
+The real value comes from **editing these docs** with the things only you know. repo-brain will never overwrite your edits. Every line you add saves you from explaining it to OpenCode in future sessions -- this is persistent memory.
+
+### architecture.md
+
+This is what `get_architecture()` returns to OpenCode. The generated version looks like this:
+
+```markdown
+### rest-api
+
+- **Path**: `services/rest-api`
+- **Type**: service
+- **Language**: python
+- **Framework**: FastAPI
+- **Description**: REST API service for FAA Test & Validation Platform
+```
+
+That tells OpenCode almost nothing useful. Edit it to include what you actually know:
+
+```markdown
+### rest-api
+
+- **Path**: `services/rest-api`
+- **Type**: service
+- **Language**: python
+- **Framework**: FastAPI
+- **Description**: REST API service for FAA Test & Validation Platform
+
+The main external-facing API. All UI requests go through nginx -> rest-api.
+Handles user auth (JWT via auth-service), topology CRUD, rule management,
+and evaluation orchestration.
+
+**Key patterns:**
+- Uses gRPC client to talk to rule-grpc-api for all rule operations
+- Evaluation requests are async: rest-api publishes to Kafka, 
+  event-swarm-node picks them up
+- Database access via SQLAlchemy + faa-models (shared library)
+- All endpoints require JWT auth except /health and /docs
+
+**Data flow:**
+- Reads/writes: PostgreSQL (via faa-models)
+- Reads: Neo4j (rule graph queries), ChromaDB (semantic rule search)
+- Publishes to: Kafka (evaluation events, audit events)
+- Depends on: auth-service, rule-grpc-api, faa-models, faa-config
+
+**Watch out:**
+- Don't add new SQLAlchemy models here -- they go in faa-models (shared lib)
+- The rule endpoints are thin wrappers around gRPC calls, don't add rule 
+  logic here
+- Alembic migrations are in postgres-init, NOT in rest-api
+```
+
+The more context you add, the less time OpenCode spends exploring. When someone asks "add a new endpoint to rest-api," OpenCode reads this and immediately knows: use SQLAlchemy via faa-models, add the route in the routers directory, don't put migrations here.
+
+**What to add per service:**
+- What it actually does in business terms (not just "FastAPI service")
+- How data flows in and out (which databases, queues, other services)
+- Key patterns and conventions (how to add a new endpoint, where models live)
+- What NOT to do (common mistakes, things that belong in other services)
+- Which services it's tightly coupled with
+
+You can also add top-level sections that aren't per-service:
+
+```markdown
+## Data Flow Overview
+
+UI -> nginx -> rest-api -> PostgreSQL (CRUD)
+                       |-> rule-grpc-api -> Neo4j (rules)
+                       |-> Kafka -> event-swarm-node -> swarm-node (evaluations)
+                                                    |-> TimescaleDB (metrics)
+
+## Shared Libraries
+
+All Python services depend on these. Changes here affect everything:
+- faa-models: SQLAlchemy models, Pydantic schemas. THE source of truth for data shapes.
+- faa-config: Environment config loading, secrets management.
+- faa-responses: Standard API response format. Every service uses this.
+```
+
+### domain_terms.md
+
+Generated as an empty table. Fill it with business vocabulary that an outsider wouldn't know:
+
+```markdown
+| Term | Meaning |
+|------|---------|
+| CATL | Cisco Automated Testing Library -- the 1,521 rules we evaluate devices against |
+| Topology | A collection of network devices being tested together (not network topology) |
+| Evaluation | Running CATL rules against a device's config to check compliance |
+| Golden template | The expected "correct" config for a device type/platform |
+| Swarm node | An agent instance that executes evaluations on a device |
+| Platform | Network OS type: IOS-XE, IOS-XR, NX-OS, ASA, or FTD |
+| RadKit | Cisco's Remote Automation and Diagnostics Kit -- SSH proxy for device access |
+```
+
+This gets loaded when OpenCode asks "what is X?" and prevents it from guessing wrong about domain-specific terms.
+
+### gotchas.md
+
+Generated as an empty skeleton. Fill it with things you've learned the hard way:
+
+```markdown
+## Known Issues
+
+- Neo4j connection pool exhaustion: if you open connections in a loop without
+  closing them, Neo4j hits the max connection limit (100). Always use the 
+  neo4j_client context manager.
+- ChromaDB collection names can't have dots. Service names with dots get 
+  sanitized, but if you manually create collections, use underscores.
+
+## Common Mistakes
+
+- Adding SQLAlchemy models in service code instead of faa-models. Every service
+  imports models from faa-models -- if you add a model in rest-api, other 
+  services can't see it.
+- Running migrations from the wrong service. Alembic migrations ONLY run from
+  postgres-init. Don't create migration files in rest-api or evaluations.
+- Forgetting to update the proto files when changing gRPC interfaces. The proto
+  files in proto/ are the source of truth -- generated code in services is 
+  derived from them.
+
+## Edge Cases
+
+- Device configs with mixed indentation (tabs + spaces) break the golden 
+  template comparison. The normalizer handles this but only if you use 
+  compare_normalized(), not raw string comparison.
+```
+
+### How Often to Update
+
+You don't need to update these constantly. Good times to add to them:
+
+- After finishing a complex ticket (write down what you learned)
+- After debugging something non-obvious (add it to gotchas)
+- When onboarding someone and explaining how things work (that explanation belongs in architecture.md)
+- When OpenCode gets something wrong because it didn't know a domain concept (add to domain_terms.md)
+
 ## Key Design Decisions
 
 - **Zero infrastructure** -- no Docker, no external services. Everything runs locally
