@@ -68,6 +68,8 @@ Targeted queries:
 
 ## MCP Tools
 
+repo-brain is a **session starter**, not a per-prompt tool. It front-loads the context so the rest of the session is pure implementation -- one call eliminates the discovery phase, then OpenCode works with actual code using its built-in tools (Read, Edit, grep, LSP).
+
 | Tool | Purpose | When to Use |
 |------|---------|-------------|
 | `scope_task(description)` | Scope any new task -- returns affected services, key files, deps, risks | Starting any new work |
