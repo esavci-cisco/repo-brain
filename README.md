@@ -50,7 +50,9 @@ Add to your repo's `opencode.json`:
 }
 ```
 
-Add to your repo's `AGENTS.md`:
+repo-brain ships its usage instructions via the MCP protocol -- OpenCode receives them automatically when the server connects. No manual AGENTS.md editing required.
+
+If you want to reinforce the instructions or customize them for your repo, you can optionally add to your `AGENTS.md`:
 
 ```markdown
 ## repo-brain

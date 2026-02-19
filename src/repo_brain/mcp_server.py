@@ -18,15 +18,33 @@ from repo_brain.config import RepoConfig, find_repo_config_by_path, load_repo_co
 logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 logger = logging.getLogger(__name__)
 
+MCP_INSTRUCTIONS = """\
+Persistent repo intelligence tools with pre-computed context about the codebase \
+architecture, dependencies, and code locations.
+
+Use repo-brain first when you need to understand what's affected, how things \
+connect, or where relevant code lives — before launching Explore agents or \
+grepping across the codebase:
+
+- scope_task(description): starting any new work, or understanding how a \
+feature/system works across services. This is the primary tool.
+- get_architecture: repo structure and service overview.
+- get_service_info(service_name): focused context for a known service.
+- query_dependencies(module): impact analysis before changing shared code.
+- search_code(query): finding code by concept, not by name.
+
+Use built-in tools (grep, glob, Read) when:
+- You already know which file or service to look at.
+- You need exact keyword or symbol matches.
+- You are reading/editing specific files during implementation.
+
+One scope_task call at the start of a task replaces minutes of codebase \
+exploration. Do not call multiple repo-brain tools preemptively.\
+"""
+
 mcp = FastMCP(
     "repo-brain",
-    instructions=(
-        "Persistent repo intelligence tools. "
-        "When starting a new task, call scope_task first to find affected "
-        "services, key files, and dependencies — this eliminates the need "
-        "to explore the codebase from scratch. Use the other tools for "
-        "targeted queries about specific services or modules."
-    ),
+    instructions=MCP_INSTRUCTIONS,
 )
 
 
