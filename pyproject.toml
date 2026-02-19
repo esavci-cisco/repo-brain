@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "repo-brain"
+version = "0.1.0"
+description = "Persistent repo intelligence service for OpenCode"
+requires-python = ">=3.11"
+dependencies = [
+    "click>=8.1",
+    "mcp>=1.0",
+    "chromadb>=0.5",
+    "sentence-transformers>=3.0",
+    "networkx>=3.0",
+    "pyyaml>=6.0",
+    "gitpython>=3.1",
+]
+
+[project.scripts]
+repo-brain = "repo_brain.cli:cli"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.8",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/repo_brain"]
+
+[tool.ruff]
+src = ["src"]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
