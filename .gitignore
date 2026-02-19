@@ -30,3 +30,8 @@ htmlcov/
 
 # uv
 uv.lock
+
+# Local planning docs (kept locally, not in repo)
+PLAN_v2.md
+TEST_PROMPTS.md
+plan.md
