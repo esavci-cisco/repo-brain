@@ -7,6 +7,7 @@ from typing import Any
 
 import chromadb
 from chromadb.config import Settings
+from chromadb.errors import NotFoundError
 
 from repo_brain.config import RepoConfig
 
@@ -25,10 +26,14 @@ class VectorStore:
             path=str(config.chroma_dir),
             settings=Settings(anonymized_telemetry=False),
         )
-        self._collection = self._client.get_or_create_collection(
-            name=self.COLLECTION_NAME,
-            metadata={"hnsw:space": "cosine"},
-        )
+        try:
+            self._collection = self._client.get_or_create_collection(
+                name=self.COLLECTION_NAME,
+                metadata={"hnsw:space": "cosine"},
+            )
+        except Exception:
+            logger.warning("ChromaDB state appears corrupted; resetting collection.")
+            self._force_reset_collection()
 
     @property
     def count(self) -> int:
@@ -46,12 +51,22 @@ class VectorStore:
         batch_size = 500
         for i in range(0, len(ids), batch_size):
             end = min(i + batch_size, len(ids))
-            self._collection.upsert(
-                ids=ids[i:end],
-                documents=documents[i:end],
-                embeddings=embeddings[i:end],
-                metadatas=metadatas[i:end],
-            )
+            try:
+                self._collection.upsert(
+                    ids=ids[i:end],
+                    documents=documents[i:end],
+                    embeddings=embeddings[i:end],
+                    metadatas=metadatas[i:end],
+                )
+            except NotFoundError:
+                logger.warning("Collection disappeared; recreating and retrying batch.")
+                self._force_reset_collection()
+                self._collection.upsert(
+                    ids=ids[i:end],
+                    documents=documents[i:end],
+                    embeddings=embeddings[i:end],
+                    metadatas=metadatas[i:end],
+                )
         logger.info("Stored %d chunks in vector store", len(ids))
 
     def search(
@@ -96,13 +111,20 @@ class VectorStore:
         """Delete all chunks for a given file path."""
         self._collection.delete(where={"file_path": file_path})
 
-    def delete_all(self) -> None:
-        """Delete all chunks. Used for full re-index."""
-        self._client.delete_collection(self.COLLECTION_NAME)
+    def _force_reset_collection(self) -> None:
+        """Delete and recreate the collection, tolerating missing state."""
+        try:
+            self._client.delete_collection(self.COLLECTION_NAME)
+        except Exception:
+            pass  # Collection may already be gone
         self._collection = self._client.get_or_create_collection(
             name=self.COLLECTION_NAME,
             metadata={"hnsw:space": "cosine"},
         )
+
+    def delete_all(self) -> None:
+        """Delete all chunks. Used for full re-index."""
+        self._force_reset_collection()
 
     def get_indexed_files(self) -> set[str]:
         """Get set of all file paths currently indexed."""

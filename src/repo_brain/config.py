@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -83,14 +82,10 @@ class RepoConfig:
 
     @property
     def slug(self) -> str:
-        """Generate a unique slug for this repo."""
-        if self.remote_url:
-            # github.com/org/repo -> github-com-org-repo
-            cleaned = self.remote_url.replace("https://", "").replace("http://", "")
-            cleaned = cleaned.replace(".git", "").replace("/", "-").replace(":", "-")
-            return cleaned
-        # Fallback to path hash
-        return hashlib.sha256(self.path.encode()).hexdigest()[:16]
+        """Generate a unique slug for this repo based on its name."""
+        # Sanitise for filesystem safety
+        cleaned = self.name.replace("/", "-").replace("\\", "-").replace(" ", "-")
+        return cleaned or "unnamed"
 
     @property
     def data_dir(self) -> Path:

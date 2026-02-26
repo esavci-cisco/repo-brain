@@ -19,19 +19,22 @@ logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 logger = logging.getLogger(__name__)
 
 MCP_INSTRUCTIONS = """\
-Pre-computed codebase intelligence with instant results — no filesystem \
-scanning needed. Call repo-brain BEFORE launching explore agents or grepping \
-across the repo.
+IMPORTANT: Always call repo-brain tools FIRST before using explore agents, \
+grep, or glob for codebase research. repo-brain has pre-indexed the entire \
+repository and returns instant results without filesystem scanning.
 
-Tool selection:
-- Starting new work / "what files are affected?" → scope_task(description)
-- "What services exist?" / repo structure → get_architecture()
-- "Tell me about service X" → get_service_info(service_name)
-- "What depends on X?" / "What would break?" → query_dependencies(module)
-- "Where is Y implemented?" (conceptual search) → search_code(query)
+When to use each tool:
+- Planning work / development plan / jira ticket / "what files are affected?" \
+→ scope_task(description) — pass the full ticket or feature description
+- "What services exist?" / repo overview / architecture → get_architecture()
+- "Tell me about service X" / service details → get_service_info(service_name)
+- "What depends on X?" / impact analysis / "what would break?" \
+→ query_dependencies(module)
+- Finding code by concept / "where is X implemented?" → search_code(query)
 
-Use built-in tools (grep, glob, Read) when you already know the target file \
-or need exact keyword/symbol matches.\
+Only fall back to built-in tools (grep, glob, Read) when you already know the \
+exact file path or need precise keyword/symbol matches that semantic search \
+cannot provide.\
 """
 
 mcp = FastMCP(
@@ -110,9 +113,11 @@ def architecture_resource() -> str:
 
 @mcp.tool()
 def search_code(query: str, limit: int = 10, service: str = "", language: str = "") -> str:
-    """Search the codebase by concept — returns ranked file paths, line numbers, and snippets.
+    """Semantic code search — find code by describing what it does, not by exact keyword.
 
-    Use when you need to find code by describing what it does, not by exact name or keyword.
+    Prefer this over grep/glob when looking for concepts like "authentication logic",
+    "database migration", "error handling in payments", etc. The entire repo is
+    pre-indexed so results are instant.
 
     Args:
         query: Natural language description of what you're looking for.
@@ -173,10 +178,10 @@ def search_code(query: str, limit: int = 10, service: str = "", language: str = 
 
 @mcp.tool()
 def get_architecture() -> str:
-    """Get the full architecture overview of the repository.
+    """Get the full architecture overview — service boundaries, data flows, infrastructure.
 
-    Returns the architecture document with service boundaries,
-    data flows, and infrastructure information.
+    Call this when the user asks about the repo structure, how services connect,
+    what technologies are used, or for a high-level understanding of the codebase.
     """
     config = _get_config()
     if not config:
@@ -189,7 +194,10 @@ def get_architecture() -> str:
 
 @mcp.tool()
 def get_service_info(service_name: str) -> str:
-    """Get detailed information about a specific service.
+    """Get detailed information about a specific service or module.
+
+    Use when focusing on one service — returns its purpose, dependencies,
+    key files, and configuration.
 
     Args:
         service_name: Name of the service (e.g., "auth-service", "rest-api", "rule-mcp").
@@ -206,9 +214,10 @@ def get_service_info(service_name: str) -> str:
 
 @mcp.tool()
 def query_dependencies(module: str, direction: str = "both", depth: int = 3) -> str:
-    """Query the dependency graph for a module or service.
+    """Query the dependency graph — what does module X depend on, and what depends on X?
 
-    Shows what a module depends on (upstream) and what depends on it (downstream).
+    Use for impact analysis ("what would break if I change X?"), understanding
+    coupling, or tracing data flow between services.
 
     Args:
         module: Module or service name to query.
@@ -227,14 +236,19 @@ def query_dependencies(module: str, direction: str = "both", depth: int = 3) -> 
 
 @mcp.tool()
 def scope_task(description: str) -> str:
-    """Scope a task — returns affected services, key files, dependency context, and risks.
+    """START HERE for any development plan, Jira ticket, feature request, or bug report.
 
-    Takes a ticket description, feature request, bug report, or any natural language
-    description of work to do.
+    Call this tool FIRST whenever the user asks you to plan work, scope a task,
+    make a development plan, analyze a ticket, or figure out what files/services
+    are affected by a change.
+
+    Returns: affected services, key files to read, dependency context,
+    risk assessment, and a suggested reading order.
 
     Args:
-        description: What the developer wants to do. Can be a ticket description,
-            acceptance criteria, feature request, or any natural language description.
+        description: The full ticket text, feature request, bug report, or
+            natural language description of the work. Paste the entire Jira
+            description or user request — more detail produces better results.
     """
     config = _get_config()
     if not config:

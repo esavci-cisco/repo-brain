@@ -31,6 +31,23 @@ SERVICE_TYPE_ORDER: list[tuple[str, str]] = [
 ]
 
 
+def _build_repo_link(config: RepoConfig) -> str:
+    """Build a clickable repo link with branch, or fall back to raw path."""
+    url = config.remote_url
+    if not url:
+        return f"`{config.path}`"
+
+    # Normalise to an HTTPS browsable URL
+    browsable = url
+    if browsable.startswith("git@"):
+        # git@github.com:org/repo.git -> https://github.com/org/repo
+        browsable = browsable.replace(":", "/", 1).replace("git@", "https://", 1)
+    browsable = browsable.removesuffix(".git")
+
+    branch_url = f"{browsable}/tree/{config.branch}"
+    return f"[{browsable}]({branch_url})"
+
+
 def generate_architecture(config: RepoConfig) -> str:
     """Analyze repo and generate architecture.md content.
 
@@ -41,7 +58,9 @@ def generate_architecture(config: RepoConfig) -> str:
     sections: list[str] = []
 
     sections.append(f"# Architecture — {config.name}\n")
-    sections.append(f"Repository: `{config.remote_url or config.path}`\n")
+    repo_link = _build_repo_link(config)
+    sections.append(f"Repository: {repo_link}\n")
+    sections.append(f"Branch: `{config.branch}`\n")
     sections.append("---\n")
 
     # Detect all components
@@ -153,6 +172,14 @@ def save_generated_docs(config: RepoConfig) -> dict[str, str]:
     config.docs_dir.mkdir(parents=True, exist_ok=True)
     created: dict[str, str] = {}
 
+    # Detect components once — shared across generators
+    repo_path = Path(config.path)
+    services = _detect_services(repo_path)
+    libraries = _detect_libraries(repo_path)
+    compose_info = _parse_compose(repo_path)
+    graph_data = _load_graph_data(config)
+    all_components = _enrich_components(services, libraries, compose_info, graph_data, repo_path)
+
     # architecture.md
     arch_path = config.docs_dir / "architecture.md"
     arch_content = generate_architecture(config)
@@ -165,31 +192,549 @@ def save_generated_docs(config: RepoConfig) -> dict[str, str]:
     map_path.write_text(json.dumps(service_map, indent=2))
     created["service_map.json"] = str(map_path)
 
-    # domain_terms.md (skeleton)
+    # domain_terms.md
     terms_path = config.docs_dir / "domain_terms.md"
-    if not terms_path.exists():
-        terms_path.write_text(
-            f"# Domain Terms — {config.name}\n\n"
-            "Add business vocabulary and internal naming conventions here.\n\n"
-            "| Term | Meaning |\n"
-            "|------|--------|\n"
-            "| | |\n"
-        )
-        created["domain_terms.md"] = str(terms_path)
+    terms_content = _generate_domain_terms(config, all_components, compose_info)
+    terms_path.write_text(terms_content)
+    created["domain_terms.md"] = str(terms_path)
 
-    # gotchas.md (skeleton)
+    # gotchas.md
     gotchas_path = config.docs_dir / "gotchas.md"
-    if not gotchas_path.exists():
-        gotchas_path.write_text(
-            f"# Gotchas — {config.name}\n\n"
-            "Document traps, edge cases, and common mistakes here.\n\n"
-            "## Known Issues\n\n"
-            "## Common Mistakes\n\n"
-            "## Edge Cases\n"
-        )
-        created["gotchas.md"] = str(gotchas_path)
+    gotchas_content = _generate_gotchas(config, all_components, compose_info, graph_data)
+    gotchas_path.write_text(gotchas_content)
+    created["gotchas.md"] = str(gotchas_path)
 
     return created
+
+
+def _generate_domain_terms(
+    config: RepoConfig,
+    components: list[dict[str, Any]],
+    compose_info: dict[str, Any],
+) -> str:
+    """Generate domain_terms.md with a glossary extracted from the codebase."""
+    repo_path = Path(config.path)
+    lines: list[str] = [
+        f"# Domain Terms — {config.name}\n",
+        "Auto-generated glossary of project terms and components.\n",
+    ]
+
+    # --- Project metadata from pyproject.toml / package.json ---
+    project_meta = _read_project_metadata(repo_path)
+    if project_meta.get("description"):
+        lines.append(f"**Project**: {project_meta['description']}\n")
+
+    # --- Key dependencies (external) ---
+    ext_deps = project_meta.get("dependencies", [])
+    if ext_deps:
+        lines.append("## Key Dependencies\n")
+        lines.append("| Package | Source |")
+        lines.append("|---------|--------|")
+        for dep in sorted(ext_deps)[:30]:  # cap to avoid huge tables
+            lines.append(f"| {dep} | external |")
+        lines.append("")
+
+    # --- Directory structure as terms ---
+    dir_terms = _extract_directory_terms(repo_path)
+    if dir_terms:
+        lines.append("## Project Structure\n")
+        lines.append("| Directory | Purpose |")
+        lines.append("|-----------|---------|")
+        for dirname, purpose in dir_terms:
+            lines.append(f"| `{dirname}` | {purpose} |")
+        lines.append("")
+
+    # --- Components (services, libraries, data stores — if present) ---
+    if components:
+        lines.append("## Components\n")
+        lines.append("| Term | Type | Description |")
+        lines.append("|------|------|-------------|")
+
+        type_order = {
+            "service": 1,
+            "mcp_server": 2,
+            "agent": 3,
+            "library": 4,
+            "data_store": 5,
+            "init": 6,
+        }
+        sorted_comps = sorted(
+            components,
+            key=lambda c: (type_order.get(c.get("display_type", ""), 99), c["name"]),
+        )
+
+        seen: set[str] = set()
+        for comp in sorted_comps:
+            name = comp["name"]
+            if name in seen:
+                continue
+            seen.add(name)
+            ctype = comp.get("display_type", "")
+            desc = comp.get("description", "")
+            if len(desc) > 120:
+                desc = desc[:117] + "..."
+            desc = desc.replace("|", "\\|")
+            lines.append(f"| {name} | {ctype} | {desc} |")
+        lines.append("")
+
+    lines.append("---\n")
+    lines.append(
+        "*Auto-generated by repo-brain. Re-running generate-docs will overwrite this file.*\n"
+    )
+    return "\n".join(lines)
+
+
+def _generate_gotchas(
+    config: RepoConfig,
+    components: list[dict[str, Any]],
+    compose_info: dict[str, Any],
+    graph_data: dict[str, Any] | None,
+) -> str:
+    """Generate gotchas.md with auto-detected complexity hotspots and warnings."""
+    repo_path = Path(config.path)
+    lines: list[str] = [
+        f"# Gotchas — {config.name}\n",
+        "Auto-detected complexity hotspots and dependency warnings.\n",
+    ]
+
+    has_content = False
+
+    # --- Large files (any repo) ---
+    large_files = _find_large_files(repo_path)
+    if large_files:
+        has_content = True
+        lines.append("## Large Files\n")
+        lines.append("These files are unusually large and may be hard to maintain.\n")
+        for fpath, line_count in large_files:
+            lines.append(f"- `{fpath}` ({line_count} lines)")
+        lines.append("")
+
+    # --- Deeply nested directories (any repo) ---
+    deep_dirs = _find_deep_directories(repo_path)
+    if deep_dirs:
+        has_content = True
+        lines.append("## Deep Directory Nesting\n")
+        lines.append("Deeply nested paths can signal overly complex module structure.\n")
+        for d in deep_dirs:
+            lines.append(f"- `{d}`")
+        lines.append("")
+
+    # --- High-dependency services (microservices) ---
+    high_dep: list[tuple[str, int, list[str]]] = []
+    for comp in components:
+        upstream = comp.get("upstream_names", comp.get("compose_depends_on", []))
+        if len(upstream) >= 4:
+            high_dep.append((comp["name"], len(upstream), upstream))
+
+    if high_dep:
+        has_content = True
+        high_dep.sort(key=lambda x: x[1], reverse=True)
+        lines.append("## High-Dependency Services\n")
+        lines.append(
+            "These services depend on many others — changes to their "
+            "dependencies have a wide blast radius.\n"
+        )
+        for name, count, deps in high_dep:
+            lines.append(f"- **{name}** ({count} dependencies): {', '.join(deps)}")
+        lines.append("")
+
+    # --- Heavily depended-on components ---
+    high_dependents: list[tuple[str, int, list[str]]] = []
+    for comp in components:
+        downstream = comp.get("downstream_names", [])
+        if len(downstream) >= 3:
+            high_dependents.append((comp["name"], len(downstream), downstream))
+
+    if high_dependents:
+        has_content = True
+        high_dependents.sort(key=lambda x: x[1], reverse=True)
+        lines.append("## Widely Used Components\n")
+        lines.append("Breaking changes in these components affect many consumers.\n")
+        for name, count, deps in high_dependents:
+            lines.append(f"- **{name}** (used by {count}): {', '.join(deps)}")
+        lines.append("")
+
+    # --- Init containers ---
+    init_services = [c for c in components if c.get("display_type") == "init"]
+    if init_services:
+        has_content = True
+        lines.append("## Init / Migration Containers\n")
+        lines.append("These must run before their dependent services are healthy.\n")
+        for comp in init_services:
+            upstream = comp.get("upstream_names", comp.get("compose_depends_on", []))
+            dep_str = f" (requires: {', '.join(upstream)})" if upstream else ""
+            lines.append(f"- **{comp['name']}**{dep_str}")
+        lines.append("")
+
+    # --- Shared data stores ---
+    store_users: dict[str, list[str]] = {}
+    for comp in components:
+        for store in comp.get("data_stores", []):
+            store_users.setdefault(store, []).append(comp["name"])
+
+    shared_stores = {s: users for s, users in store_users.items() if len(users) >= 2}
+    if shared_stores:
+        has_content = True
+        lines.append("## Shared Data Stores\n")
+        lines.append(
+            "Multiple services write to these stores — watch for "
+            "schema migration conflicts and race conditions.\n"
+        )
+        for store, users in sorted(shared_stores.items(), key=lambda x: len(x[1]), reverse=True):
+            lines.append(f"- **{store}** ({len(users)} services): {', '.join(users)}")
+        lines.append("")
+
+    # --- gRPC services ---
+    grpc_comps = [c for c in components if c.get("grpc_services")]
+    if grpc_comps:
+        has_content = True
+        lines.append("## gRPC Services\n")
+        lines.append("Proto changes require regenerating stubs in all consumers.\n")
+        for comp in grpc_comps:
+            lines.append(f"- **{comp['name']}**: {', '.join(comp['grpc_services'])}")
+        lines.append("")
+
+    if not has_content:
+        lines.append("No gotchas detected automatically.\n")
+
+    lines.append("---\n")
+    lines.append(
+        "*Auto-generated by repo-brain. Re-running generate-docs will overwrite this file.*\n"
+    )
+    return "\n".join(lines)
+
+
+# --- Generic repo analysis helpers ---
+
+_SKIP_DIRS = {
+    ".git",
+    ".venv",
+    "venv",
+    "node_modules",
+    "__pycache__",
+    "dist",
+    "build",
+    ".ruff_cache",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".tox",
+    ".eggs",
+    "egg-info",
+    ".next",
+    ".nuxt",
+    "coverage",
+}
+
+_DIR_PURPOSE: dict[str, str] = {
+    "src": "Source code",
+    "lib": "Library code",
+    "app": "Application entry point",
+    "api": "API layer",
+    "core": "Core business logic",
+    "config": "Configuration",
+    "configs": "Configuration",
+    "utils": "Utility helpers",
+    "helpers": "Utility helpers",
+    "common": "Shared code",
+    "shared": "Shared code",
+    "models": "Data models",
+    "schemas": "Data schemas",
+    "services": "Service layer / microservices",
+    "controllers": "Request handlers",
+    "routes": "Route definitions",
+    "handlers": "Request/event handlers",
+    "middleware": "Middleware",
+    "views": "View layer",
+    "templates": "Templates",
+    "static": "Static assets",
+    "public": "Public assets",
+    "assets": "Assets",
+    "components": "UI components",
+    "pages": "Page components",
+    "hooks": "React/custom hooks",
+    "store": "State management",
+    "stores": "State management",
+    "tests": "Tests",
+    "test": "Tests",
+    "spec": "Tests / specs",
+    "fixtures": "Test fixtures",
+    "migrations": "Database migrations",
+    "alembic": "Alembic migrations",
+    "scripts": "Utility scripts",
+    "bin": "Executables / scripts",
+    "tools": "Developer tools",
+    "docs": "Documentation",
+    "deploy": "Deployment configs",
+    "infra": "Infrastructure as code",
+    "terraform": "Terraform IaC",
+    "helm": "Helm charts",
+    "k8s": "Kubernetes manifests",
+    "docker": "Docker configs",
+    ".github": "GitHub workflows / config",
+    "ci": "CI/CD config",
+    "agents": "AI agents",
+    "mcp_servers": "MCP servers",
+    "libraries": "Shared libraries",
+    "proto": "Protocol Buffer definitions",
+    "protos": "Protocol Buffer definitions",
+    "grpc": "gRPC service layer",
+}
+
+_CODE_EXTENSIONS = {
+    ".py",
+    ".js",
+    ".ts",
+    ".tsx",
+    ".jsx",
+    ".go",
+    ".rs",
+    ".java",
+    ".rb",
+    ".php",
+    ".cs",
+    ".cpp",
+    ".c",
+    ".h",
+    ".swift",
+    ".kt",
+    ".scala",
+    ".vue",
+    ".svelte",
+}
+
+
+def _read_project_metadata(repo_path: Path) -> dict[str, Any]:
+    """Read project metadata from pyproject.toml or package.json at repo root."""
+    meta: dict[str, Any] = {}
+
+    pyproject = repo_path / "pyproject.toml"
+    if pyproject.exists():
+        try:
+            try:
+                import tomllib
+            except ImportError:
+                import tomli as tomllib  # type: ignore[no-redef]
+
+            data = tomllib.loads(pyproject.read_text())
+            project = data.get("project", {})
+            meta["name"] = project.get("name", "")
+            meta["description"] = project.get("description", "")
+            raw_deps = project.get("dependencies", [])
+            # Extract just package names (strip versions)
+            deps = []
+            for dep in raw_deps:
+                if isinstance(dep, str):
+                    name = dep.split(">=")[0].split("<=")[0].split("==")[0]
+                    name = name.split("~=")[0].split("[")[0].split("@")[0].strip()
+                    if name:
+                        deps.append(name)
+            meta["dependencies"] = deps
+        except Exception:
+            pass
+
+    pkg_json = repo_path / "package.json"
+    if pkg_json.exists() and not meta.get("name"):
+        try:
+            data = json.loads(pkg_json.read_text())
+            meta["name"] = data.get("name", "")
+            meta["description"] = data.get("description", "")
+            deps = list(data.get("dependencies", {}).keys())
+            deps += list(data.get("devDependencies", {}).keys())
+            meta["dependencies"] = deps
+        except Exception:
+            pass
+
+    return meta
+
+
+def _extract_directory_terms(repo_path: Path) -> list[tuple[str, str]]:
+    """Extract top-level directories and infer their purpose."""
+    terms: list[tuple[str, str]] = []
+    try:
+        entries = sorted(repo_path.iterdir())
+    except OSError:
+        return terms
+
+    for entry in entries:
+        if not entry.is_dir():
+            continue
+        name = entry.name
+        if name in _SKIP_DIRS or name.startswith("."):
+            continue
+        purpose = _DIR_PURPOSE.get(name, "")
+        if not purpose:
+            # Try to infer from contents
+            purpose = _infer_dir_purpose(entry)
+        if purpose:
+            terms.append((name, purpose))
+
+    return terms
+
+
+def _infer_dir_purpose(directory: Path) -> str:
+    """Try to infer a directory's purpose from its contents."""
+    try:
+        children = list(directory.iterdir())
+    except OSError:
+        return ""
+
+    child_names = {c.name for c in children}
+
+    if "Dockerfile" in child_names or "docker-compose.yml" in child_names:
+        return "Containerized service"
+    if "pyproject.toml" in child_names:
+        return "Python package"
+    if "package.json" in child_names:
+        return "Node.js package"
+    if "go.mod" in child_names:
+        return "Go module"
+    if "Cargo.toml" in child_names:
+        return "Rust crate"
+    if any(c.suffix == ".proto" for c in children if c.is_file()):
+        return "Protocol Buffer definitions"
+    if any(c.suffix == ".md" for c in children if c.is_file()):
+        has_code = any(c.suffix in _CODE_EXTENSIONS for c in children if c.is_file())
+        if not has_code:
+            return "Documentation"
+    return ""
+
+
+def _find_large_files(
+    repo_path: Path,
+    threshold: int = 500,
+) -> list[tuple[str, int]]:
+    """Find source files exceeding a line threshold."""
+    large: list[tuple[str, int]] = []
+
+    for ext in _CODE_EXTENSIONS:
+        for fpath in repo_path.rglob(f"*{ext}"):
+            if any(skip in fpath.parts for skip in _SKIP_DIRS):
+                continue
+            try:
+                line_count = sum(1 for _ in fpath.open())
+                if line_count >= threshold:
+                    rel = str(fpath.relative_to(repo_path))
+                    large.append((rel, line_count))
+            except (OSError, UnicodeDecodeError):
+                continue
+
+    large.sort(key=lambda x: x[1], reverse=True)
+    return large[:15]  # Top 15
+
+
+def _find_deep_directories(
+    repo_path: Path,
+    threshold: int = 7,
+) -> list[str]:
+    """Find directories with nesting deeper than threshold levels."""
+    deep: list[str] = []
+
+    for dirpath in repo_path.rglob("*"):
+        if not dirpath.is_dir():
+            continue
+        if any(skip in dirpath.parts for skip in _SKIP_DIRS):
+            continue
+        try:
+            rel = dirpath.relative_to(repo_path)
+        except ValueError:
+            continue
+        if len(rel.parts) >= threshold:
+            deep.append(str(rel))
+
+    deep.sort()
+    return deep[:10]  # Cap output
+
+
+def _generate_gotchas(
+    config: RepoConfig,
+    components: list[dict[str, Any]],
+    compose_info: dict[str, Any],
+    graph_data: dict[str, Any] | None,
+) -> str:
+    """Generate gotchas.md with auto-detected complexity hotspots and warnings."""
+    lines: list[str] = [
+        f"# Gotchas — {config.name}\n",
+        "Auto-detected complexity hotspots and dependency warnings.\n",
+    ]
+
+    # --- High-dependency services ---
+    high_dep: list[tuple[str, int, list[str]]] = []
+    for comp in components:
+        upstream = comp.get("upstream_names", comp.get("compose_depends_on", []))
+        if len(upstream) >= 4:
+            high_dep.append((comp["name"], len(upstream), upstream))
+
+    if high_dep:
+        high_dep.sort(key=lambda x: x[1], reverse=True)
+        lines.append("## High-Dependency Services\n")
+        lines.append(
+            "These services depend on many others — changes to their "
+            "dependencies have a wide blast radius.\n"
+        )
+        for name, count, deps in high_dep:
+            lines.append(f"- **{name}** ({count} dependencies): {', '.join(deps)}")
+        lines.append("")
+
+    # --- Heavily depended-on components ---
+    high_dependents: list[tuple[str, int, list[str]]] = []
+    for comp in components:
+        downstream = comp.get("downstream_names", [])
+        if len(downstream) >= 3:
+            high_dependents.append((comp["name"], len(downstream), downstream))
+
+    if high_dependents:
+        high_dependents.sort(key=lambda x: x[1], reverse=True)
+        lines.append("## Widely Used Components\n")
+        lines.append("Breaking changes in these components affect many consumers.\n")
+        for name, count, deps in high_dependents:
+            lines.append(f"- **{name}** (used by {count}): {', '.join(deps)}")
+        lines.append("")
+
+    # --- Init containers ---
+    init_services = [c for c in components if c.get("display_type") == "init"]
+    if init_services:
+        lines.append("## Init / Migration Containers\n")
+        lines.append("These must run before their dependent services are healthy.\n")
+        for comp in init_services:
+            upstream = comp.get("upstream_names", comp.get("compose_depends_on", []))
+            dep_str = f" (requires: {', '.join(upstream)})" if upstream else ""
+            lines.append(f"- **{comp['name']}**{dep_str}")
+        lines.append("")
+
+    # --- Shared data stores ---
+    store_users: dict[str, list[str]] = {}
+    for comp in components:
+        for store in comp.get("data_stores", []):
+            store_users.setdefault(store, []).append(comp["name"])
+
+    shared_stores = {s: users for s, users in store_users.items() if len(users) >= 2}
+    if shared_stores:
+        lines.append("## Shared Data Stores\n")
+        lines.append(
+            "Multiple services write to these stores — watch for "
+            "schema migration conflicts and race conditions.\n"
+        )
+        for store, users in sorted(shared_stores.items(), key=lambda x: len(x[1]), reverse=True):
+            lines.append(f"- **{store}** ({len(users)} services): {', '.join(users)}")
+        lines.append("")
+
+    # --- gRPC services ---
+    grpc_comps = [c for c in components if c.get("grpc_services")]
+    if grpc_comps:
+        lines.append("## gRPC Services\n")
+        lines.append("Proto changes require regenerating stubs in all consumers.\n")
+        for comp in grpc_comps:
+            lines.append(f"- **{comp['name']}**: {', '.join(comp['grpc_services'])}")
+        lines.append("")
+
+    if len(lines) <= 3:
+        lines.append("No gotchas detected automatically.\n")
+
+    lines.append("---\n")
+    lines.append(
+        "*Auto-generated by repo-brain. Re-running generate-docs will overwrite this file.*\n"
+    )
+    return "\n".join(lines)
 
 
 # --- Enrichment pipeline ---
@@ -398,9 +943,6 @@ def _extract_readme_description(repo_path: Path, service_path: str) -> str:
     if len(result) > 300:
         result = result[:297] + "..."
     return result
-
-
-# --- Rendering helpers ---
 
 
 def _render_component(comp: dict[str, Any]) -> str:
