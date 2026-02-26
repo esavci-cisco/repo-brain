@@ -29,9 +29,13 @@ logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 logger = logging.getLogger(__name__)
 
 MCP_INSTRUCTIONS = """\
-repo-brain has a pre-built semantic index of this repository.
-- scope_task — plan work: pass a ticket/feature/bug to get affected files, deps, risks
-- search_code — find code by concept ("authentication flow") rather than keyword\
+When you need to understand how code works, find relevant files, or plan a task, \
+use repo-brain tools instead of grep/glob/explore agents. repo-brain has a \
+pre-built semantic index of this entire repository.
+- scope_task — pass a ticket/feature/bug description to get affected files, \
+dependencies, and risks. Use this before starting any multi-file change.
+- search_code — find code by meaning ("authentication flow", "error handling") \
+rather than exact keyword. Faster and more accurate than grep for conceptual queries.\
 """
 
 mcp = FastMCP(
@@ -196,12 +200,17 @@ def _get_freshness_line() -> str:
 
 @mcp.tool()
 def search_code(query: str, limit: int = 10, service: str = "", language: str = "") -> str:
-    """Semantic code search — finds code by concept rather than exact keyword.
+    """Find code by meaning rather than exact keyword.
+
+    Faster and more accurate than grep for conceptual queries.
+    Use this instead of grep/glob/explore when searching for concepts like
+    "authentication flow", "error handling", or "database connection setup".
 
     Args:
-        query: Natural language description of what you're looking for.
+        query: Natural language description of what you're looking for
+            (e.g., "how are WebSocket connections handled").
         limit: Maximum number of results (default 10).
-        service: Optional service name filter.
+        service: Optional service/component name filter.
         language: Optional language filter (e.g., "python", "go").
     """
     config = _resources.config
@@ -251,7 +260,12 @@ def search_code(query: str, limit: int = 10, service: str = "", language: str = 
 
 @mcp.tool()
 def scope_task(description: str) -> str:
-    """Plan and scope a task — identifies affected files, dependencies, and risks.
+    """Scope and plan a task before you start coding.
+
+    Identifies all affected files, dependencies, and risks.
+    Use this before starting any multi-file change, bug fix,
+    or feature implementation. Returns a targeted plan with
+    the specific files to read and modify.
 
     Args:
         description: Ticket text, feature request, bug report, or description

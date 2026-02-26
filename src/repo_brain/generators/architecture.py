@@ -211,6 +211,11 @@ def save_generated_docs(config: RepoConfig) -> dict[str, str]:
     if "agents_md" in agents_result:
         created["AGENTS.md"] = agents_result["agents_md"]
 
+    # Generate custom subagent for OpenCode
+    subagent_result = generate_subagent(config, all_components)
+    if subagent_result:
+        created["repo-brain subagent"] = subagent_result
+
     return created
 
 
@@ -309,6 +314,170 @@ def inject_agents_md(
     return written
 
 
+# ── Custom subagent generation ───────────────────────────────────────
+
+
+def generate_subagent(
+    config: RepoConfig,
+    components: list[dict[str, Any]] | None = None,
+) -> str | None:
+    """Generate a custom OpenCode subagent at ``.opencode/agents/repo-brain.md``.
+
+    The subagent competes with the built-in ``explore`` agent for codebase
+    exploration tasks.  Because OpenCode's system prompt directs the LLM to
+    use ``Task`` (subagents) for exploration, having a ``repo-brain`` subagent
+    with a matching description causes the LLM to pick it over ``explore``.
+
+    The subagent has access to repo-brain MCP tools and read-only file tools,
+    so it can answer questions like "how does authentication work?" by
+    querying the semantic index rather than spawning grep/glob searches.
+
+    Returns the path to the written file, or ``None`` if skipped.
+    """
+    repo_path = Path(config.path)
+    agents_dir = repo_path / ".opencode" / "agents"
+    agents_dir.mkdir(parents=True, exist_ok=True)
+    subagent_path = agents_dir / "repo-brain.md"
+
+    content = _build_subagent_content(config, components)
+
+    # Idempotent — skip if content unchanged
+    if subagent_path.exists():
+        existing = subagent_path.read_text()
+        if existing == content:
+            logger.info("repo-brain subagent already up to date at %s", subagent_path)
+            return str(subagent_path)
+
+    subagent_path.write_text(content)
+    logger.info("Generated repo-brain subagent at %s", subagent_path)
+    return str(subagent_path)
+
+
+def _build_subagent_content(
+    config: RepoConfig,
+    components: list[dict[str, Any]] | None = None,
+) -> str:
+    """Build the markdown content for the repo-brain subagent file."""
+    # Determine the MCP server name from opencode.json, defaulting to "repo-brain"
+    mcp_server_name = _detect_mcp_server_name(Path(config.path))
+    tool_prefix = f"{mcp_server_name}_"
+
+    # Build a compact component summary for the subagent prompt
+    component_context = ""
+    if components:
+        comp_lines: list[str] = []
+        by_type: dict[str, list[str]] = {}
+        for comp in components:
+            ctype = comp.get("display_type", "service")
+            by_type.setdefault(ctype, []).append(comp["name"])
+        for ctype, names in by_type.items():
+            comp_lines.append(f"- {ctype}: {', '.join(names[:10])}")
+            if len(names) > 10:
+                comp_lines[-1] += f" (+{len(names) - 10} more)"
+        component_context = "\n".join(comp_lines)
+
+    # Frontmatter
+    lines: list[str] = [
+        "---",
+        (
+            "description: Semantic codebase exploration using a pre-built index. "
+            "Faster and more accurate than explore for understanding how features work, "
+            "finding code by concept, or planning multi-file changes. "
+            "Use this when users ask about code architecture, how something works, "
+            "or when you need to find files related to a concept."
+        ),
+        "mode: subagent",
+        'color: "#8b5cf6"',
+        "tools:",
+        f"  {tool_prefix}search_code: true",
+        f"  {tool_prefix}scope_task: true",
+        f"  {tool_prefix}refresh_index: true",
+        "  read: true",
+        "  glob: true",
+        "  write: false",
+        "  edit: false",
+        "  bash: false",
+        "---",
+        "",
+    ]
+
+    # Prompt body
+    lines.extend(
+        [
+            f"# repo-brain — Semantic Explorer for {config.name}",
+            "",
+            "You are a codebase exploration agent with access to a pre-built semantic",
+            "index of this repository. You can answer questions about code architecture,",
+            "find relevant files by concept, and plan multi-file changes.",
+            "",
+            "## How to answer questions",
+            "",
+            "1. **Start with `search_code`** for any question about how code works,",
+            "   where something is implemented, or what files are relevant to a concept.",
+            f"   Call `{tool_prefix}search_code` with a natural language query.",
+            "",
+            "2. **Use `scope_task`** when the user describes a task, bug, or feature.",
+            f"   Call `{tool_prefix}scope_task` with the description to get affected files,",
+            "   dependencies, and risks.",
+            "",
+            "3. **Use `read`** to examine specific files returned by search or scope.",
+            "   Read the relevant sections to provide detailed answers.",
+            "",
+            "4. **Combine results** — search gives you file locations, read gives you",
+            "   the actual code. Use both to give complete, accurate answers.",
+            "",
+            "## Important",
+            "",
+            "- The semantic index searches by meaning, not keywords. Use natural",
+            '  language queries like "authentication flow" or "error handling in API".',
+            "- You do NOT need to use grep or glob to find files — the index already",
+            "  covers the entire repository.",
+            "- If search returns no results, the index may need refreshing.",
+            f"  Use `{tool_prefix}refresh_index` in that case.",
+        ]
+    )
+
+    if component_context:
+        lines.extend(
+            [
+                "",
+                "## Repository components",
+                "",
+                component_context,
+            ]
+        )
+
+    lines.append("")  # Trailing newline
+    return "\n".join(lines)
+
+
+def _detect_mcp_server_name(repo_path: Path) -> str:
+    """Detect the MCP server name from opencode.json, defaulting to 'repo-brain'.
+
+    The server name determines the tool prefix in OpenCode (e.g. ``repo-brain_search_code``).
+    We look for an MCP config entry whose command includes ``repo-brain``.
+    """
+    opencode_json = repo_path / "opencode.json"
+    if not opencode_json.exists():
+        return "repo-brain"
+
+    try:
+        data = json.loads(opencode_json.read_text())
+        mcp_config = data.get("mcp", {})
+        for server_name, server_config in mcp_config.items():
+            command = server_config.get("command", [])
+            if isinstance(command, list):
+                cmd_str = " ".join(command)
+            else:
+                cmd_str = str(command)
+            if "repo-brain" in cmd_str:
+                return server_name
+    except Exception:
+        pass
+
+    return "repo-brain"
+
+
 def _ensure_gitignore(repo_path: Path, entry: str) -> None:
     """Add *entry* to .gitignore if not already present."""
     gitignore = repo_path / ".gitignore"
@@ -350,6 +519,15 @@ def _generate_overview(
         lines.append(f"**Tech stack**: {tech}")
         lines.append("")
 
+    # --- Subagent reference ---
+    lines.append("### Codebase Exploration")
+    lines.append(
+        "This repo has a `repo-brain` subagent with a semantic index of the codebase. "
+        "When exploring code or planning tasks, prefer `repo-brain` over `explore` — "
+        "it searches by meaning rather than keyword and knows the dependency graph."
+    )
+    lines.append("")
+
     # --- Directory structure (for non-microservice repos) ---
     if not components:
         dir_terms = _extract_directory_terms(repo_path)
@@ -368,15 +546,6 @@ def _generate_overview(
 
     # --- Gotchas (condensed) ---
     _append_gotcha_summary(lines, components or [], repo_path)
-
-    # --- MCP tools ---
-    lines.append("### repo-brain MCP Tools")
-    lines.append(
-        "This repo has a pre-built semantic index. "
-        "Prefer these over grep/glob for codebase research:"
-    )
-    lines.append("- `scope_task(description)` — plan work: affected files, deps, risks")
-    lines.append("- `search_code(query)` — semantic search by concept")
 
     return "\n".join(lines)
 
