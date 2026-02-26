@@ -24,20 +24,13 @@ uv tool install /path/to/repo-brain
 # 2. Register your repo
 repo-brain init /path/to/your/repo
 
-# 3. Generate architecture docs (the main value)
-repo-brain generate-docs
+# 3. Run the full pipeline (index + build-graph + generate-docs)
+repo-brain setup
 
-# 4. Build the dependency graph
-repo-brain build-graph
-
-# 5. Index the codebase (for semantic search)
-repo-brain index
-
-# 6. (Optional) Save embedding model locally for faster search
+# 4. (Optional) Save embedding model locally for faster search
 repo-brain export-model
 
-# 7. Add MCP config to your repo's opencode.json
-# 8. Add instructions to your repo's AGENTS.md
+# 5. Add MCP config to your repo's opencode.json
 ```
 
 ---
@@ -66,19 +59,27 @@ repo-brain init /path/to/your/repo
 
 This registers the repo, auto-detects the git remote and branch, and creates a config at `~/.repo-brain/repos/<repo-slug>/config.toml`.
 
-### 3. Generate architecture docs
+### 3. Set up the repo (all-in-one)
 
 ```bash
-repo-brain generate-docs
+repo-brain setup
 ```
 
-This is the highest-value step. Creates starter docs at `~/.repo-brain/repos/<slug>/docs/`:
-- `architecture.md` — service map, frameworks, data stores
-- `service_map.json` — structured dependency data
-- `domain_terms.md` — skeleton for business vocabulary (you fill this in)
-- `gotchas.md` — skeleton for known traps (you fill this in)
+This runs the full pipeline in order: **index → build-graph → generate-docs**.
 
-**These are starting points.** Edit them to add real domain knowledge — what each service does, how data flows, what the gotchas are. repo-brain will never overwrite your edits. The more you curate these, the better OpenCode performs.
+- **Index**: scans all files, chunks them (AST-aware for Python, sliding window for others), generates embeddings, and stores them in local ChromaDB. For a ~4,300 file repo, this takes about 60 seconds on an M-series Mac.
+- **Build graph**: parses `compose.yml`, all `pyproject.toml` files, and `.proto` files to build a unified dependency graph.
+- **Generate docs**: creates starter docs at `~/.repo-brain/repos/<slug>/docs/` enriched with graph data.
+
+Use `repo-brain setup --full` to force a full re-index (delete existing and rebuild).
+
+You can also run each step individually if needed:
+
+```bash
+repo-brain index          # Just re-index
+repo-brain build-graph    # Just rebuild the graph
+repo-brain generate-docs  # Just regenerate docs
+```
 
 #### Curating the docs (highest ROI thing you can do)
 
@@ -94,27 +95,7 @@ Do the same for `domain_terms.md` (business vocabulary that an outsider wouldn't
 
 Every line you add saves you from explaining it to OpenCode in future sessions. This is persistent memory — write it once, benefit forever.
 
-### 4. Build the dependency graph
-
-```bash
-repo-brain build-graph
-```
-
-Parses `compose.yml`, all `pyproject.toml` files, and `.proto` files to build a unified dependency graph. This powers `query_dependencies` and enriches `get_service_info` with upstream/downstream data.
-
-For the FAA repo, this finds 63 nodes and 84 edges in under a second.
-
-### 5. Index the codebase
-
-```bash
-repo-brain index
-```
-
-Full index: scans all files, chunks them (AST-aware for Python, sliding window for others), generates embeddings, and stores them in local ChromaDB.
-
-For a ~4,300 file repo, this takes about 60 seconds on an M-series Mac.
-
-### 5. (Optional) Save embedding model locally
+### 4. (Optional) Save embedding model locally
 
 ```bash
 repo-brain export-model
@@ -122,7 +103,7 @@ repo-brain export-model
 
 One-time operation. Saves the embedding model to `~/.repo-brain/models/` so future searches skip HuggingFace network checks. Shaves ~2 seconds off each search.
 
-### 6. Wire into OpenCode
+### 5. Wire into OpenCode
 
 Add the `mcp` section to your target repo's `opencode.json`:
 
@@ -143,34 +124,14 @@ Add the `mcp` section to your target repo's `opencode.json`:
 
 Since `repo-brain` is installed globally via `uv tool`, OpenCode can find it directly on your PATH.
 
+repo-brain ships its usage instructions via the MCP protocol — OpenCode receives them automatically when the server connects. No manual AGENTS.md editing required.
+
 **GITHUB_TOKEN** (optional): Only needed by the `refresh_index` tool (which runs `git fetch`). You can omit it if:
 - Your repo is public
 - You use SSH remotes (`git@github.com:...`)
 - You have a git credential helper configured (`gh auth login`, macOS Keychain, etc.)
 
 If you need it, add `"GITHUB_TOKEN": "{env:GITHUB_TOKEN}"` to the environment block.
-
-### 7. Add to AGENTS.md (Important)
-
-Add this to your repo's `AGENTS.md`. Without this, OpenCode will still launch Task agents to explore the filesystem even though repo-brain already has the answer. This instruction prevents that:
-
-```markdown
-## repo-brain
-
-This repo has a repo-brain MCP server with persistent architecture context and a
-dependency graph.
-
-When to use repo-brain vs built-in tools:
-
-- "What services exist / how is the repo structured?" → `get_architecture` (no exploration needed)
-- "What does service X depend on?" → `get_service_info(service_name)` (no exploration needed)
-- "What would break if I change X?" → `query_dependencies(module)` (no exploration needed)
-- "Where is Y implemented?" (fuzzy/conceptual) → `search_code(query)`
-- Implementation planning (e.g., "add feature X") → explore actual code with grep/Read as normal
-- Exact names or keywords → grep/glob
-
-Do NOT call multiple repo-brain tools preemptively. Only call the one that fits the question.
-```
 
 ---
 
@@ -198,12 +159,12 @@ This means running `repo-brain index` after a few file changes takes seconds, no
 
 | Situation | Command | Time |
 |-----------|---------|------|
-| First time setup | `repo-brain index` | ~60s for 4K files |
+| First time setup | `repo-brain setup` | ~60s for 4K files |
 | After changing compose/toml/proto | `repo-brain build-graph` | ~1s |
 | After pulling new code | `repo-brain index` | ~5-15s (only changed files) |
 | Pull + re-index in one step | `repo-brain refresh` | ~5-15s (git fetch + delta) |
 | Something feels stale | `repo-brain index` | Seconds if few changes |
-| Changed skip patterns or config | `repo-brain index --full` | ~60s (full rebuild) |
+| Changed skip patterns or config | `repo-brain setup --full` | ~60s (full rebuild) |
 | Check what's indexed | `repo-brain status` | Instant |
 
 ### You do NOT need to re-index every session
@@ -227,6 +188,7 @@ For day-to-day work where you're editing a few files, the existing index is fine
 
 ```
 repo-brain init <path>         # Register a repo
+repo-brain setup [--full]      # Run full pipeline: index + build-graph + generate-docs
 repo-brain index [--full]      # Index (incremental by default)
 repo-brain build-graph         # Build dependency graph from compose/toml/proto
 repo-brain refresh [--no-pull] # Git fetch + re-index delta
@@ -288,7 +250,7 @@ Everything lives under `~/.repo-brain/`:
             └── gotchas.md           # Edit this! Add known traps
 ```
 
-To completely reset a repo's index: delete the `<repo-slug>/` directory and re-run `repo-brain init` + `repo-brain index`.
+To completely reset a repo's index: delete the `<repo-slug>/` directory and re-run `repo-brain init` + `repo-brain setup`.
 
 ---
 
@@ -300,6 +262,6 @@ To completely reset a repo's index: delete the `<repo-slug>/` directory and re-r
 
 **MCP server not connecting in OpenCode**: Make sure `repo-brain` is on your PATH (`which repo-brain`). If not, run `uv tool install /path/to/repo-brain` again. Test with `repo-brain serve` to verify the server starts.
 
-**OpenCode still launches Task agents for architecture questions**: Make sure you added the repo-brain section to your `AGENTS.md` (step 7). Without it, OpenCode doesn't know to trust repo-brain and will redundantly explore the filesystem.
+**OpenCode still launches Task agents for architecture questions**: Check that the MCP server is connecting successfully (`repo-brain serve` should start without errors). repo-brain ships its own instructions via the MCP protocol — OpenCode should pick them up automatically.
 
 **Index seems slow**: First run downloads the embedding model (~90MB). Run `repo-brain export-model` to save it locally and skip network checks on future runs.

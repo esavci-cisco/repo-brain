@@ -19,27 +19,19 @@ logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 logger = logging.getLogger(__name__)
 
 MCP_INSTRUCTIONS = """\
-Persistent repo intelligence tools with pre-computed context about the codebase \
-architecture, dependencies, and code locations.
+Pre-computed codebase intelligence with instant results — no filesystem \
+scanning needed. Call repo-brain BEFORE launching explore agents or grepping \
+across the repo.
 
-Use repo-brain first when you need to understand what's affected, how things \
-connect, or where relevant code lives — before launching Explore agents or \
-grepping across the codebase:
+Tool selection:
+- Starting new work / "what files are affected?" → scope_task(description)
+- "What services exist?" / repo structure → get_architecture()
+- "Tell me about service X" → get_service_info(service_name)
+- "What depends on X?" / "What would break?" → query_dependencies(module)
+- "Where is Y implemented?" (conceptual search) → search_code(query)
 
-- scope_task(description): starting any new work, or understanding how a \
-feature/system works across services. This is the primary tool.
-- get_architecture: repo structure and service overview.
-- get_service_info(service_name): focused context for a known service.
-- query_dependencies(module): impact analysis before changing shared code.
-- search_code(query): finding code by concept, not by name.
-
-Use built-in tools (grep, glob, Read) when:
-- You already know which file or service to look at.
-- You need exact keyword or symbol matches.
-- You are reading/editing specific files during implementation.
-
-One scope_task call at the start of a task replaces minutes of codebase \
-exploration. Do not call multiple repo-brain tools preemptively.\
+Use built-in tools (grep, glob, Read) when you already know the target file \
+or need exact keyword/symbol matches.\
 """
 
 mcp = FastMCP(
@@ -77,9 +69,50 @@ def _get_config() -> RepoConfig | None:
     return config
 
 
+def _get_freshness_line(config: RepoConfig) -> str:
+    """Build an index freshness summary line for tool outputs."""
+    try:
+        from repo_brain.storage.metadata_db import MetadataDB
+
+        db = MetadataDB(config)
+        stats = db.get_stats()
+        db.close()
+
+        file_count = stats.get("total_files", 0)
+        last_run = stats.get("last_index_run", "")
+
+        parts = [f"{file_count} files indexed"]
+        if last_run:
+            parts.append(f"last updated {last_run}")
+        return f"[Index: {', '.join(parts)}]"
+    except Exception:
+        return ""
+
+
+@mcp.resource(
+    "repo://architecture",
+    name="architecture",
+    title="Repository Architecture Overview",
+    description="Full architecture document with service boundaries, dependencies, "
+    "data flows, and infrastructure. Auto-loaded at session start.",
+    mime_type="text/markdown",
+)
+def architecture_resource() -> str:
+    """Serve architecture.md as an MCP resource for auto-loading."""
+    config = _get_config()
+    if not config:
+        return "No repo configured. Run `repo-brain init <path>` first."
+
+    from repo_brain.tools.architecture import get_architecture as _get_arch
+
+    return _get_arch(config)
+
+
 @mcp.tool()
 def search_code(query: str, limit: int = 10, service: str = "", language: str = "") -> str:
-    """Search the codebase semantically. Use this to find code by describing what it does.
+    """Search the codebase by concept — returns ranked file paths, line numbers, and snippets.
+
+    Use when you need to find code by describing what it does, not by exact name or keyword.
 
     Args:
         query: Natural language description of what you're looking for.
@@ -105,6 +138,13 @@ def search_code(query: str, limit: int = 10, service: str = "", language: str = 
         return "No results found."
 
     output_parts: list[str] = []
+
+    # Freshness metadata
+    freshness = _get_freshness_line(config)
+    if freshness:
+        output_parts.append(freshness)
+        output_parts.append("")
+
     for i, r in enumerate(results, 1):
         header = f"[{i}] {r['file_path']}"
         if r["symbol_name"]:
@@ -121,6 +161,12 @@ def search_code(query: str, limit: int = 10, service: str = "", language: str = 
             for line in snippet_lines:
                 output_parts.append(f"    {line}")
         output_parts.append("")
+
+    output_parts.append("---")
+    output_parts.append(
+        "For research, pass these file paths to a Task agent. "
+        "Read files directly only when you plan to edit them."
+    )
 
     return "\n".join(output_parts)
 
@@ -181,16 +227,10 @@ def query_dependencies(module: str, direction: str = "both", depth: int = 3) -> 
 
 @mcp.tool()
 def scope_task(description: str) -> str:
-    """Scope a task before starting implementation.
+    """Scope a task — returns affected services, key files, dependency context, and risks.
 
-    Takes any natural language description of work to do — a Jira ticket,
-    feature request, bug report, or just "add caching to rule queries" —
-    and returns: affected services, key files to read, dependency context,
-    and risk assessment.
-
-    Use this FIRST when starting any new task where you don't already know
-    which files are affected. This replaces the need to explore the codebase
-    from scratch.
+    Takes a ticket description, feature request, bug report, or any natural language
+    description of work to do.
 
     Args:
         description: What the developer wants to do. Can be a ticket description,
@@ -204,7 +244,14 @@ def scope_task(description: str) -> str:
     from repo_brain.tools.scope import scope_task as _scope
 
     result = _scope(description=description, config=config)
-    return format_scope_result(result)
+    output = format_scope_result(result)
+
+    # Prepend freshness metadata
+    freshness = _get_freshness_line(config)
+    if freshness:
+        output = f"{freshness}\n\n{output}"
+
+    return output
 
 
 @mcp.tool()

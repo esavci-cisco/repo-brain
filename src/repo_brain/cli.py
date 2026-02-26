@@ -38,9 +38,12 @@ def init(repo_path: str, name: str | None) -> None:
         click.echo(f"  Data dir: {config.data_dir}")
         click.echo()
         click.echo("Next steps:")
-        click.echo("  1. repo-brain index          # Index the codebase")
-        click.echo("  2. repo-brain generate-docs   # Generate architecture docs")
-        click.echo("  3. repo-brain search <query>  # Search code")
+        click.echo("  repo-brain setup   # Index, build graph, generate docs (all-in-one)")
+        click.echo()
+        click.echo("Or run individually:")
+        click.echo("  repo-brain index          # Index the codebase")
+        click.echo("  repo-brain build-graph    # Build dependency graph")
+        click.echo("  repo-brain generate-docs  # Generate architecture docs")
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         raise SystemExit(1)
@@ -299,6 +302,33 @@ def generate_docs(repo: str | None) -> None:
 
     click.echo()
     click.echo("These docs are a starting point. Edit them to add domain knowledge.")
+
+
+@cli.command()
+@click.option("--full", is_flag=True, help="Full re-index (delete existing and rebuild)")
+@click.option("--repo", "-r", default=None, help="Repo name or path")
+@click.pass_context
+def setup(ctx: click.Context, full: bool, repo: str | None) -> None:
+    """Run the full pipeline: index, build-graph, generate-docs."""
+    click.echo("=" * 40)
+    click.echo("Step 1/3: Indexing")
+    click.echo("=" * 40)
+    ctx.invoke(index, full=full, repo=repo)
+
+    click.echo()
+    click.echo("=" * 40)
+    click.echo("Step 2/3: Building dependency graph")
+    click.echo("=" * 40)
+    ctx.invoke(build_graph_cmd, repo=repo)
+
+    click.echo()
+    click.echo("=" * 40)
+    click.echo("Step 3/3: Generating docs")
+    click.echo("=" * 40)
+    ctx.invoke(generate_docs, repo=repo)
+
+    click.echo()
+    click.echo("Setup complete. repo-brain is ready to use.")
 
 
 @cli.command("build-graph")

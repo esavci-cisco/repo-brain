@@ -24,11 +24,9 @@ All data is stored locally at `~/.repo-brain/`. No Docker, no external services,
 # Install globally
 uv tool install /path/to/repo-brain
 
-# Register and index your repo
+# Register and set up your repo (index + build-graph + generate-docs)
 repo-brain init /path/to/your/repo
-repo-brain generate-docs
-repo-brain build-graph
-repo-brain index
+repo-brain setup
 
 # Add MCP config to your repo's opencode.json
 ```
@@ -51,34 +49,6 @@ Add to your repo's `opencode.json`:
 ```
 
 repo-brain ships its usage instructions via the MCP protocol -- OpenCode receives them automatically when the server connects. No manual AGENTS.md editing required.
-
-If you want to reinforce the instructions or customize them for your repo, you can optionally add to your `AGENTS.md`:
-
-```markdown
-## repo-brain
-
-This repo has a repo-brain MCP server with persistent context about the
-codebase architecture, dependencies, and code locations.
-
-Use repo-brain first when you need to understand what's affected, how things
-connect, or where relevant code lives — before launching Explore agents or
-grepping across the codebase:
-
-- `scope_task(description)` — starting any new work, or understanding how
-  a feature/system works across services
-- `get_architecture` — repo structure and service overview
-- `get_service_info(service_name)` — focused context for a known service
-- `query_dependencies(module)` — impact analysis before changing shared code
-- `search_code(query)` — finding code by concept, not by name
-
-Use built-in tools (grep, glob, Read) when:
-- You already know which file or service to look at
-- You need exact keyword or symbol matches
-- You're reading/editing specific files during implementation
-
-One scope_task call at the start of a task replaces minutes of codebase
-exploration. Do not call multiple repo-brain tools preemptively.
-```
 
 ## MCP Tools
 
@@ -134,6 +104,7 @@ OpenCode gets this context in one tool call instead of spending minutes explorin
 
 ```
 repo-brain init <path>         # Register a repo
+repo-brain setup [--full]      # Run full pipeline: index + build-graph + generate-docs
 repo-brain index [--full]      # Index codebase (incremental by default)
 repo-brain build-graph         # Build dependency graph from compose/toml/proto
 repo-brain generate-docs       # Generate architecture docs (one-shot, then curate)

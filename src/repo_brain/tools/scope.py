@@ -158,6 +158,14 @@ def format_scope_result(result: dict[str, Any]) -> str:
         lines.append(f"**Note**: {result['note']}")
         lines.append("")
 
+    # Post-call guidance — arrives after the tool is called, when the AI
+    # is deciding what to do next with the results.
+    lines.append("---")
+    lines.append(
+        "**Next**: For research, pass these file paths to a Task agent for deep reading. "
+        "For implementation, Read only the files you plan to edit."
+    )
+
     return "\n".join(lines)
 
 
