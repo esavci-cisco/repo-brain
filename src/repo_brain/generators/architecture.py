@@ -216,21 +216,8 @@ def save_generated_docs(config: RepoConfig) -> dict[str, str]:
 
 # ── AGENTS.md injection ──────────────────────────────────────────────
 
-_POINTER_MARKER = "<!-- repo-brain:start -->"
-_POINTER_MARKER_END = "<!-- repo-brain:end -->"
-
-_POINTER_SECTION = (
-    f"{_POINTER_MARKER}\n"
-    "## repo-brain\n"
-    "\n"
-    "This repo has a pre-built semantic index.  Read `.repo-brain/codebase-overview.md`\n"
-    "for architecture overview, service map, dependency hotspots, and gotchas.\n"
-    "\n"
-    "Available MCP tools (prefer over grep/glob for codebase research):\n"
-    "- `scope_task(description)` — plan work: affected files, deps, risks\n"
-    "- `search_code(query)` — semantic search by concept\n"
-    f"{_POINTER_MARKER_END}"
-)
+_SECTION_MARKER = "<!-- repo-brain:start -->"
+_SECTION_MARKER_END = "<!-- repo-brain:end -->"
 
 # Legacy markers from earlier versions that should be cleaned up
 _LEGACY_MARKERS = [
@@ -244,91 +231,80 @@ def inject_agents_md(
     compose_info: dict[str, Any] | None = None,
     graph_data: dict[str, Any] | None = None,
 ) -> dict[str, str]:
-    """Write codebase overview and append a pointer to AGENTS.md.
+    """Inline codebase overview at the end of AGENTS.md and write a copy.
 
-    1. Writes the full overview to ``<repo>/.repo-brain/codebase-overview.md``.
-    2. Appends a small pointer section at the end of AGENTS.md (idempotent).
-       If AGENTS.md doesn't exist, creates it with just the pointer.
-    3. Cleans up any legacy repo-brain sections from AGENTS.md.
+    1. Builds a compact overview section from repo data.
+    2. Appends it (between markers) at the end of AGENTS.md — existing
+       content above the markers is never modified.
+    3. Also writes a copy to ``<repo>/.repo-brain/codebase-overview.md``
+       (gitignored) for reference.
 
-    Returns dict of written paths: ``{"overview": ..., "agents_md": ...}``.
-    ``agents_md`` is ``None`` when the pointer was already present.
+    Returns dict of written paths (keys: ``"agents_md"``, ``"overview"``).
     """
     repo_path = Path(config.path)
     written: dict[str, str] = {}
 
-    # ── 1. Write full overview to .repo-brain/codebase-overview.md ──
+    # Build the section content
+    overview = _generate_overview(config, components, compose_info, graph_data)
+    section = f"{_SECTION_MARKER}\n{overview}\n{_SECTION_MARKER_END}"
+
+    # ── 1. Write secondary copy to .repo-brain/codebase-overview.md ──
     overview_dir = repo_path / ".repo-brain"
     overview_dir.mkdir(exist_ok=True)
     overview_path = overview_dir / "codebase-overview.md"
-
-    overview_content = _generate_agents_section(config, components, compose_info, graph_data)
-    overview_path.write_text(overview_content + "\n")
+    overview_path.write_text(overview + "\n")
     written["overview"] = str(overview_path)
     logger.info("Wrote codebase overview to %s", overview_path)
 
-    # ── 2. Ensure .repo-brain/ is gitignored ──
     _ensure_gitignore(repo_path, ".repo-brain/")
 
-    # ── 3. Append pointer to AGENTS.md ──
+    # ── 2. Inline section at end of AGENTS.md ──
     agents_path = repo_path / "AGENTS.md"
-    agents_changed = False
 
     if agents_path.exists():
         content = agents_path.read_text()
 
         # Remove legacy markers
-        for old_start_marker, old_end_marker in _LEGACY_MARKERS:
-            if old_start_marker in content:
-                start = content.index(old_start_marker)
-                if old_end_marker in content:
-                    end = content.index(old_end_marker) + len(old_end_marker)
-                else:
-                    end = start + len(old_start_marker)
-                before = content[:start].rstrip("\n")
-                after = content[end:].lstrip("\n")
+        for old_start, old_end in _LEGACY_MARKERS:
+            if old_start in content:
+                s = content.index(old_start)
+                e = (
+                    content.index(old_end) + len(old_end)
+                    if old_end in content
+                    else s + len(old_start)
+                )
+                before = content[:s].rstrip("\n")
+                after = content[e:].lstrip("\n")
                 content = before + "\n\n" + after if after else before + "\n"
-                agents_changed = True
 
-        if _POINTER_MARKER in content:
-            # Extract existing section and compare
-            start = content.index(_POINTER_MARKER)
-            if _POINTER_MARKER_END in content:
-                end = content.index(_POINTER_MARKER_END) + len(_POINTER_MARKER_END)
-                existing = content[start:end]
+        if _SECTION_MARKER in content:
+            # Replace existing section
+            s = content.index(_SECTION_MARKER)
+            if _SECTION_MARKER_END in content:
+                e = content.index(_SECTION_MARKER_END) + len(_SECTION_MARKER_END)
+                existing = content[s:e]
             else:
+                e = s + len(_SECTION_MARKER)
                 existing = ""
 
-            if existing == _POINTER_SECTION:
-                # Pointer already correct — only write if legacy cleanup happened
-                if agents_changed:
-                    agents_path.write_text(content)
-            else:
-                # Replace outdated pointer section
-                before = content[:start].rstrip("\n")
-                after = content[end:].lstrip("\n")
-                content = before + "\n\n" + after if after else before + "\n"
-                if not content.endswith("\n"):
-                    content += "\n"
-                content += "\n" + _POINTER_SECTION + "\n"
-                agents_path.write_text(content)
-                agents_changed = True
-        else:
-            # No pointer yet — append at the end
-            if not content.endswith("\n"):
-                content += "\n"
-            content += "\n" + _POINTER_SECTION + "\n"
-            agents_path.write_text(content)
-            agents_changed = True
-    else:
-        content = _POINTER_SECTION + "\n"
-        agents_path.write_text(content)
-        agents_changed = True
+            if existing == section:
+                # Already up to date
+                return written
 
-    if agents_changed:
-        agents_path.write_text(content)
-        written["agents_md"] = str(agents_path)
-        logger.info("Updated pointer in %s", agents_path)
+            before = content[:s].rstrip("\n")
+            after = content[e:].lstrip("\n")
+            content = before + "\n" if not after else before + "\n\n" + after
+        # else: no existing section, append below
+
+        if not content.endswith("\n"):
+            content += "\n"
+        content += "\n" + section + "\n"
+    else:
+        content = section + "\n"
+
+    agents_path.write_text(content)
+    written["agents_md"] = str(agents_path)
+    logger.info("Injected repo-brain section into %s", agents_path)
 
     return written
 
@@ -348,18 +324,18 @@ def _ensure_gitignore(repo_path: Path, entry: str) -> None:
         gitignore.write_text(f"# repo-brain generated files\n{entry}\n")
 
 
-def _generate_agents_section(
+def _generate_overview(
     config: RepoConfig,
     components: list[dict[str, Any]] | None = None,
     compose_info: dict[str, Any] | None = None,
     graph_data: dict[str, Any] | None = None,
 ) -> str:
-    """Build the codebase overview content for .repo-brain/codebase-overview.md.
+    """Build the codebase overview content.
 
     Target: ~300-500 tokens.  Includes architecture overview, key modules,
-    dependency hotspots, and gotchas.
+    dependency hotspots, gotchas, and MCP tool pointers.
     """
-    lines: list[str] = ["# Codebase Overview", ""]
+    lines: list[str] = ["## Codebase Overview", ""]
 
     # --- Project description ---
     repo_path = Path(config.path)
@@ -392,6 +368,15 @@ def _generate_agents_section(
 
     # --- Gotchas (condensed) ---
     _append_gotcha_summary(lines, components or [], repo_path)
+
+    # --- MCP tools ---
+    lines.append("### repo-brain MCP Tools")
+    lines.append(
+        "This repo has a pre-built semantic index. "
+        "Prefer these over grep/glob for codebase research:"
+    )
+    lines.append("- `scope_task(description)` — plan work: affected files, deps, risks")
+    lines.append("- `search_code(query)` — semantic search by concept")
 
     return "\n".join(lines)
 
