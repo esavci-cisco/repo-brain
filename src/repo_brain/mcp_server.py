@@ -3,10 +3,13 @@
 This is the entry point that OpenCode spawns as a subprocess.
 Run with: python -m repo_brain.mcp_server
 
+The server exposes two main tools: scope_task (planning) and search_code
+(semantic search).  Architecture knowledge is delivered statically via
+AGENTS.md to minimise per-session token overhead.
+
 Performance note: expensive resources (ChromaDB client, embedding model,
 graph store) are initialised once at startup and cached for the lifetime
-of the server process.  Individual tool calls therefore pay only the cost
-of the actual query, not of loading ~300 MB of state.
+of the server process.
 """
 
 from __future__ import annotations
@@ -26,21 +29,9 @@ logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 logger = logging.getLogger(__name__)
 
 MCP_INSTRUCTIONS = """\
-repo-brain has pre-indexed this entire repository (parsed, chunked, embedded). \
-Its tools return instant results without filesystem scanning, so they are the \
-recommended way to research the codebase before falling back to grep/glob/Read.
-
-Tool overview:
-- scope_task — best starting point for planning: development plans, Jira \
-tickets, figuring out affected files/services
-- search_code — semantic search by concept ("authentication flow", "error \
-handling in payments") rather than exact keyword
-- get_architecture — repo overview, service boundaries, data flows, tech stack
-- get_service_info — deep dive into one specific service or module
-- query_dependencies — impact analysis, "what depends on X?", coupling
-
-Prefer grep/glob/Read only when you already know the exact file path or need \
-precise keyword/symbol matches that semantic search cannot provide.\
+repo-brain has a pre-built semantic index of this repository.
+- scope_task — plan work: pass a ticket/feature/bug to get affected files, deps, risks
+- search_code — find code by concept ("authentication flow") rather than keyword\
 """
 
 mcp = FastMCP(
@@ -185,55 +176,32 @@ _resources = _ServerResources()
 
 
 def _get_freshness_line() -> str:
-    """Build an index freshness summary line for tool outputs."""
+    """Build a compact index freshness note."""
     try:
         db = _resources.metadata_db
         if db is None:
             return ""
         stats = db.get_stats()
-
         file_count = stats.get("total_files", 0)
         last_run = stats.get("last_index_run", "")
-
-        parts = [f"{file_count} files indexed"]
-        if last_run:
-            parts.append(f"last updated {last_run}")
-        return f"[Index: {', '.join(parts)}]"
+        if file_count:
+            parts = [f"{file_count} files"]
+            if last_run:
+                parts.append(f"updated {last_run}")
+            return f"[Index: {', '.join(parts)}]"
     except Exception:
-        return ""
-
-
-@mcp.resource(
-    "repo://architecture",
-    name="architecture",
-    title="Repository Architecture Overview",
-    description="Full architecture document with service boundaries, dependencies, "
-    "data flows, and infrastructure. Auto-loaded at session start.",
-    mime_type="text/markdown",
-)
-def architecture_resource() -> str:
-    """Serve architecture.md as an MCP resource for auto-loading."""
-    config = _resources.config
-    if not config:
-        return "No repo configured. Run `repo-brain init <path>` first."
-
-    from repo_brain.tools.architecture import get_architecture as _get_arch
-
-    return _get_arch(config)
+        pass
+    return ""
 
 
 @mcp.tool()
 def search_code(query: str, limit: int = 10, service: str = "", language: str = "") -> str:
-    """Semantic code search — finds code by concept rather than exact keyword match.
-
-    Useful for queries like "authentication logic", "database migration",
-    "error handling in payments", etc. The entire repo is pre-indexed so
-    results are instant.
+    """Semantic code search — finds code by concept rather than exact keyword.
 
     Args:
         query: Natural language description of what you're looking for.
         limit: Maximum number of results (default 10).
-        service: Optional service name filter (e.g., "auth-service").
+        service: Optional service name filter.
         language: Optional language filter (e.g., "python", "go").
     """
     config = _resources.config
@@ -256,152 +224,38 @@ def search_code(query: str, limit: int = 10, service: str = "", language: str = 
 
     output_parts: list[str] = []
 
-    # Freshness metadata
     freshness = _get_freshness_line()
     if freshness:
         output_parts.append(freshness)
         output_parts.append("")
 
     for i, r in enumerate(results, 1):
-        header = f"[{i}] {r['file_path']}"
+        # Compact: [1] file_path:line — symbol  [score]
+        header = f"[{i}] {r['file_path']}:{r['line_start']}"
         if r["symbol_name"]:
             header += f" — {r['symbol_type']}: {r['symbol_name']}"
         if r["service"]:
-            header += f" (service: {r['service']})"
-        header += f"  [score: {r['score']}]"
-
+            header += f" ({r['service']})"
+        header += f"  [{r['score']}]"
         output_parts.append(header)
-        output_parts.append(f"    Lines {r['line_start']}-{r['line_end']}")
+
+        # Show only first 3 lines of snippet
         if r["snippet"]:
-            # Indent snippet
-            snippet_lines = r["snippet"].splitlines()[:15]
+            snippet_lines = r["snippet"].splitlines()[:3]
             for line in snippet_lines:
                 output_parts.append(f"    {line}")
         output_parts.append("")
-
-    output_parts.append("---")
-    output_parts.append("**Follow-up repo-brain tools:**")
-    output_parts.append("- `search_code(query)` with a refined query to narrow results")
-    # Extract unique services from results for a targeted suggestion
-    svc_names = sorted({r["service"] for r in results if r.get("service")})
-    if svc_names:
-        output_parts.append(
-            f"- `get_service_info(service_name)` — details on {', '.join(svc_names[:3])}"
-        )
-    output_parts.append("- `query_dependencies(module)` — check impact before changing these files")
-    output_parts.append("- Read files directly when you plan to edit them.")
 
     return "\n".join(output_parts)
 
 
 @mcp.tool()
-def get_architecture() -> str:
-    """Full architecture overview — service boundaries, data flows, infrastructure.
-
-    Useful when the user asks about repo structure, how services connect,
-    what technologies are used, or for a high-level understanding of the codebase.
-    """
-    config = _resources.config
-    if not config:
-        return "Error: No repo configured. Run `repo-brain init <path>` first."
-
-    from repo_brain.tools.architecture import get_architecture as _get_arch
-
-    output = _get_arch(config)
-
-    # Append follow-up tool suggestions
-    output += (
-        "\n\n---\n"
-        "**Follow-up repo-brain tools:**\n"
-        "- `scope_task(description)` — plan work based on this architecture\n"
-        "- `search_code(query)` — find implementations of specific components\n"
-        "- `get_service_info(service_name)` — deep dive into one service\n"
-        "- `query_dependencies(module)` — trace dependencies between modules"
-    )
-
-    return output
-
-
-@mcp.tool()
-def get_service_info(service_name: str) -> str:
-    """Detailed information about a specific service or module.
-
-    Returns its purpose, dependencies, key files, and configuration.
-
-    Args:
-        service_name: Name of the service (e.g., "auth-service", "rest-api", "rule-mcp").
-    """
-    config = _resources.config
-    if not config:
-        return "Error: No repo configured. Run `repo-brain init <path>` first."
-
-    from repo_brain.tools.architecture import get_service_info as _get_svc
-
-    info = _get_svc(
-        service_name,
-        config,
-        vector_store=_resources.vector_store,
-        graph_store=_resources.graph_store,
-    )
-
-    # Append follow-up tool suggestions
-    info["follow_up_tools"] = [
-        "search_code(query) — find specific code within this service",
-        "query_dependencies(module) — see what depends on this service",
-        "scope_task(description) — plan changes involving this service",
-    ]
-
-    return json.dumps(info, indent=2)
-
-
-@mcp.tool()
-def query_dependencies(module: str, direction: str = "both", depth: int = 3) -> str:
-    """Dependency graph query — what does module X depend on, and what depends on X?
-
-    Useful for impact analysis ("what would break if I change X?"), understanding
-    coupling, or tracing data flow between services.
-
-    Args:
-        module: Module or service name to query.
-        direction: "up" (dependencies), "down" (dependents), or "both".
-        depth: How many levels deep to traverse (default 3).
-    """
-    config = _resources.config
-    if not config:
-        return "Error: No repo configured. Run `repo-brain init <path>` first."
-
-    from repo_brain.tools.dependencies import query_dependencies as _query_deps
-
-    result = _query_deps(
-        module=module,
-        config=config,
-        direction=direction,
-        depth=depth,
-        graph_store=_resources.graph_store,
-    )
-
-    # Append follow-up tool suggestions
-    result["follow_up_tools"] = [
-        "search_code(query) — find code related to these dependencies",
-        "get_service_info(service_name) — details on a specific dependent service",
-        "scope_task(description) — plan a change with impact awareness",
-    ]
-
-    return json.dumps(result, indent=2)
-
-
-@mcp.tool()
 def scope_task(description: str) -> str:
-    """Plan and scope a task — identifies affected services, key files, dependencies, and risks.
-
-    Useful for development plans, Jira tickets, feature requests, or bug reports.
-    Returns affected services, key files to read, dependency context,
-    risk assessment, and a suggested reading order.
+    """Plan and scope a task — identifies affected files, dependencies, and risks.
 
     Args:
-        description: The full ticket text, feature request, bug report, or
-            natural language description of the work. More detail produces
-            better results.
+        description: Ticket text, feature request, bug report, or description
+            of the work. More detail produces better results.
     """
     config = _resources.config
     if not config:
@@ -418,7 +272,6 @@ def scope_task(description: str) -> str:
     )
     output = format_scope_result(result)
 
-    # Prepend freshness metadata
     freshness = _get_freshness_line()
     if freshness:
         output = f"{freshness}\n\n{output}"
@@ -428,7 +281,7 @@ def scope_task(description: str) -> str:
 
 @mcp.tool()
 def refresh_index(pull: bool = True) -> str:
-    """Refresh the code index by pulling latest changes and re-indexing modified files.
+    """Refresh the code index by pulling latest changes and re-indexing.
 
     Args:
         pull: Whether to git fetch from remote before indexing (default True).
@@ -440,26 +293,7 @@ def refresh_index(pull: bool = True) -> str:
     from repo_brain.tools.refresh import refresh_index as _refresh
 
     result = _refresh(config, pull=pull)
-    return json.dumps(result, indent=2)
-
-
-@mcp.tool()
-def index_status() -> str:
-    """Show the current index status — file counts, staleness, and last run info."""
-    config = _resources.config
-    if not config:
-        return "Error: No repo configured. Run `repo-brain init <path>` first."
-
-    db = _resources.metadata_db
-    if db is None:
-        return "Error: MetadataDB not available."
-    stats = db.get_stats()
-
-    vs = _resources.vector_store
-    if vs is not None:
-        stats["vector_store_chunks"] = vs.count
-
-    return json.dumps(stats, indent=2, default=str)
+    return json.dumps(result)
 
 
 def main() -> None:

@@ -204,89 +204,377 @@ def save_generated_docs(config: RepoConfig) -> dict[str, str]:
     gotchas_path.write_text(gotchas_content)
     created["gotchas.md"] = str(gotchas_path)
 
-    # Inject repo-brain section into AGENTS.md (in repo root)
-    agents_result = inject_agents_md(config)
-    if agents_result:
-        created["AGENTS.md"] = agents_result
+    # Inject repo-brain pointer into AGENTS.md + write codebase overview
+    agents_result = inject_agents_md(config, all_components, compose_info, graph_data)
+    if "overview" in agents_result:
+        created["codebase-overview.md"] = agents_result["overview"]
+    if "agents_md" in agents_result:
+        created["AGENTS.md"] = agents_result["agents_md"]
 
     return created
 
 
 # ── AGENTS.md injection ──────────────────────────────────────────────
 
-_AGENTS_SECTION_MARKER = "<!-- repo-brain:codebase-research -->"
+_POINTER_MARKER = "<!-- repo-brain:start -->"
+_POINTER_MARKER_END = "<!-- repo-brain:end -->"
 
-_AGENTS_SECTION_CONTENT = """\
-{marker}
-## Codebase Research
+_POINTER_SECTION = (
+    f"{_POINTER_MARKER}\n"
+    "## repo-brain\n"
+    "\n"
+    "This repo has a pre-built semantic index.  Read `.repo-brain/codebase-overview.md`\n"
+    "for architecture overview, service map, dependency hotspots, and gotchas.\n"
+    "\n"
+    "Available MCP tools (prefer over grep/glob for codebase research):\n"
+    "- `scope_task(description)` — plan work: affected files, deps, risks\n"
+    "- `search_code(query)` — semantic search by concept\n"
+    f"{_POINTER_MARKER_END}"
+)
 
-This repo has a **repo-brain** MCP server with a pre-built index of the entire
-codebase. When researching the codebase (understanding architecture, planning
-tasks, finding code), prefer repo-brain tools over explore agents — they return
-instant results without filesystem scanning:
-
-- `scope_task(description)` — best starting point for planning: pass a Jira
-  ticket, feature request, or bug report to get affected services, key files,
-  dependencies, and risks
-- `search_code(query)` — semantic search by concept (e.g. "authentication
-  flow", "error handling in payments") rather than exact keyword
-- `get_architecture()` — full repo overview, service boundaries, data flows,
-  tech stack
-- `get_service_info(service_name)` — deep dive into one service's purpose,
-  dependencies, and key files
-- `query_dependencies(module)` — impact analysis: what depends on a module and
-  what it depends on
-
-Use explore agents and grep/glob only when you need to read specific files you
-already know about, or search for exact symbol names.
-{marker_end}"""
+# Legacy markers from earlier versions that should be cleaned up
+_LEGACY_MARKERS = [
+    ("<!-- repo-brain:codebase-research -->", "<!-- repo-brain:codebase-research :end -->"),
+]
 
 
-def inject_agents_md(config: RepoConfig) -> str | None:
-    """Inject a 'Codebase Research' section into the repo's AGENTS.md.
+def inject_agents_md(
+    config: RepoConfig,
+    components: list[dict[str, Any]] | None = None,
+    compose_info: dict[str, Any] | None = None,
+    graph_data: dict[str, Any] | None = None,
+) -> dict[str, str]:
+    """Write codebase overview and append a pointer to AGENTS.md.
 
-    - If AGENTS.md doesn't exist, creates it with just the repo-brain section.
-    - If it exists but lacks the section, appends it.
-    - If it already has the section (idempotent marker), replaces it in case
-      the content was updated.
+    1. Writes the full overview to ``<repo>/.repo-brain/codebase-overview.md``.
+    2. Appends a small pointer section at the end of AGENTS.md (idempotent).
+       If AGENTS.md doesn't exist, creates it with just the pointer.
+    3. Cleans up any legacy repo-brain sections from AGENTS.md.
 
-    Returns the path to AGENTS.md if written, or None if no change was needed.
+    Returns dict of written paths: ``{"overview": ..., "agents_md": ...}``.
+    ``agents_md`` is ``None`` when the pointer was already present.
     """
     repo_path = Path(config.path)
-    agents_path = repo_path / "AGENTS.md"
+    written: dict[str, str] = {}
 
-    marker = _AGENTS_SECTION_MARKER
-    marker_end = marker.replace("-->", ":end -->")
-    section = _AGENTS_SECTION_CONTENT.format(marker=marker, marker_end=marker_end)
+    # ── 1. Write full overview to .repo-brain/codebase-overview.md ──
+    overview_dir = repo_path / ".repo-brain"
+    overview_dir.mkdir(exist_ok=True)
+    overview_path = overview_dir / "codebase-overview.md"
+
+    overview_content = _generate_agents_section(config, components, compose_info, graph_data)
+    overview_path.write_text(overview_content + "\n")
+    written["overview"] = str(overview_path)
+    logger.info("Wrote codebase overview to %s", overview_path)
+
+    # ── 2. Ensure .repo-brain/ is gitignored ──
+    _ensure_gitignore(repo_path, ".repo-brain/")
+
+    # ── 3. Append pointer to AGENTS.md ──
+    agents_path = repo_path / "AGENTS.md"
+    agents_changed = False
 
     if agents_path.exists():
         content = agents_path.read_text()
 
-        if marker in content:
-            # Replace existing section between markers
-            start = content.index(marker)
-            end_marker = marker.replace("-->", ":end -->")
-            if end_marker in content:
-                end = content.index(end_marker) + len(end_marker)
-                new_content = content[:start] + section + content[end:]
+        # Remove legacy markers
+        for old_start_marker, old_end_marker in _LEGACY_MARKERS:
+            if old_start_marker in content:
+                start = content.index(old_start_marker)
+                if old_end_marker in content:
+                    end = content.index(old_end_marker) + len(old_end_marker)
+                else:
+                    end = start + len(old_start_marker)
+                before = content[:start].rstrip("\n")
+                after = content[end:].lstrip("\n")
+                content = before + "\n\n" + after if after else before + "\n"
+                agents_changed = True
+
+        if _POINTER_MARKER in content:
+            # Extract existing section and compare
+            start = content.index(_POINTER_MARKER)
+            if _POINTER_MARKER_END in content:
+                end = content.index(_POINTER_MARKER_END) + len(_POINTER_MARKER_END)
+                existing = content[start:end]
             else:
-                # Marker exists but no end marker — append end marker
-                new_content = content[:start] + section + content[start + len(marker) :]
-            if new_content.rstrip() == content.rstrip():
-                return None  # No change needed
-            agents_path.write_text(new_content)
+                existing = ""
+
+            if existing == _POINTER_SECTION:
+                # Pointer already correct — only write if legacy cleanup happened
+                if agents_changed:
+                    agents_path.write_text(content)
+            else:
+                # Replace outdated pointer section
+                before = content[:start].rstrip("\n")
+                after = content[end:].lstrip("\n")
+                content = before + "\n\n" + after if after else before + "\n"
+                if not content.endswith("\n"):
+                    content += "\n"
+                content += "\n" + _POINTER_SECTION + "\n"
+                agents_path.write_text(content)
+                agents_changed = True
         else:
-            # Append section to existing file
+            # No pointer yet — append at the end
             if not content.endswith("\n"):
                 content += "\n"
-            content += "\n" + section + "\n"
+            content += "\n" + _POINTER_SECTION + "\n"
             agents_path.write_text(content)
+            agents_changed = True
     else:
-        # Create new AGENTS.md with just the repo-brain section
-        agents_path.write_text(section + "\n")
+        content = _POINTER_SECTION + "\n"
+        agents_path.write_text(content)
+        agents_changed = True
 
-    logger.info("Injected repo-brain section into %s", agents_path)
-    return str(agents_path)
+    if agents_changed:
+        agents_path.write_text(content)
+        written["agents_md"] = str(agents_path)
+        logger.info("Updated pointer in %s", agents_path)
+
+    return written
+
+
+def _ensure_gitignore(repo_path: Path, entry: str) -> None:
+    """Add *entry* to .gitignore if not already present."""
+    gitignore = repo_path / ".gitignore"
+    if gitignore.exists():
+        text = gitignore.read_text()
+        if entry in text:
+            return
+        if not text.endswith("\n"):
+            text += "\n"
+        text += f"\n# repo-brain generated files\n{entry}\n"
+        gitignore.write_text(text)
+    else:
+        gitignore.write_text(f"# repo-brain generated files\n{entry}\n")
+
+
+def _generate_agents_section(
+    config: RepoConfig,
+    components: list[dict[str, Any]] | None = None,
+    compose_info: dict[str, Any] | None = None,
+    graph_data: dict[str, Any] | None = None,
+) -> str:
+    """Build the codebase overview content for .repo-brain/codebase-overview.md.
+
+    Target: ~300-500 tokens.  Includes architecture overview, key modules,
+    dependency hotspots, and gotchas.
+    """
+    lines: list[str] = ["# Codebase Overview", ""]
+
+    # --- Project description ---
+    repo_path = Path(config.path)
+    meta = _read_project_metadata(repo_path)
+    if meta.get("description"):
+        lines.append(meta["description"])
+        lines.append("")
+
+    # --- Tech stack ---
+    tech = _summarize_tech_stack(components or [], compose_info or {}, repo_path)
+    if tech:
+        lines.append(f"**Tech stack**: {tech}")
+        lines.append("")
+
+    # --- Directory structure (for non-microservice repos) ---
+    if not components:
+        dir_terms = _extract_directory_terms(repo_path)
+        if dir_terms:
+            lines.append("## Structure")
+            for dirname, purpose in dir_terms[:10]:
+                lines.append(f"- `{dirname}/` — {purpose}")
+            lines.append("")
+
+    # --- Modules / services (compact) ---
+    if components:
+        _append_component_summary(lines, components)
+
+    # --- High-impact dependencies ---
+    _append_dependency_hotspots(lines, components or [])
+
+    # --- Gotchas (condensed) ---
+    _append_gotcha_summary(lines, components or [], repo_path)
+
+    return "\n".join(lines)
+
+
+def _summarize_tech_stack(
+    components: list[dict[str, Any]],
+    compose_info: dict[str, Any],
+    repo_path: Path,
+) -> str:
+    """Build a one-line tech stack summary."""
+    parts: list[str] = []
+
+    # Languages from components
+    langs: set[str] = set()
+    frameworks: set[str] = set()
+    for comp in components:
+        lang = comp.get("language", "")
+        if lang:
+            langs.add(lang.capitalize())
+        fw = comp.get("framework", "")
+        if fw:
+            frameworks.add(fw)
+
+    # Fallback: detect from repo root
+    if not langs:
+        if (repo_path / "pyproject.toml").exists():
+            langs.add("Python")
+        if (repo_path / "package.json").exists():
+            langs.add("TypeScript")
+        if (repo_path / "go.mod").exists():
+            langs.add("Go")
+        if (repo_path / "Cargo.toml").exists():
+            langs.add("Rust")
+
+    if langs:
+        parts.append(", ".join(sorted(langs)))
+    if frameworks:
+        parts.append(", ".join(sorted(frameworks)))
+
+    # Data stores from compose
+    stores: set[str] = set()
+    for ds in compose_info.get("data_stores", []):
+        store_type = ds.get("type", "")
+        if store_type:
+            stores.add(store_type)
+    if stores:
+        parts.append(", ".join(sorted(stores)))
+
+    return ", ".join(parts)
+
+
+def _append_component_summary(
+    lines: list[str],
+    components: list[dict[str, Any]],
+) -> None:
+    """Append a compact module/service summary to lines."""
+    # Group by type
+    by_type: dict[str, list[dict[str, Any]]] = {}
+    for comp in components:
+        ctype = comp.get("display_type", "service")
+        by_type.setdefault(ctype, []).append(comp)
+
+    type_labels = {
+        "service": "Services",
+        "mcp_server": "MCP Servers",
+        "agent": "Agents",
+        "library": "Libraries",
+        "data_store": "Data Stores",
+        "init": "Init Jobs",
+    }
+
+    for type_key, label in type_labels.items():
+        comps = by_type.get(type_key, [])
+        if not comps:
+            continue
+
+        lines.append(f"### {label} ({len(comps)})")
+
+        # Show top components (sorted by downstream count = most depended on)
+        ranked = sorted(
+            comps,
+            key=lambda c: len(c.get("downstream_names", [])),
+            reverse=True,
+        )
+
+        # Show up to 8 with detail, summarize the rest
+        show_limit = 8
+        for comp in ranked[:show_limit]:
+            name = comp["name"]
+            parts: list[str] = []
+
+            # Path
+            path = comp.get("path", "")
+            if path:
+                parts.append(f"`{path}`")
+
+            # Brief description (truncated)
+            desc = comp.get("description", "")
+            if desc:
+                if len(desc) > 80:
+                    desc = desc[:77] + "..."
+                parts.append(desc)
+
+            # Dependency count if notable
+            upstream = comp.get("upstream_names", comp.get("compose_depends_on", []))
+            downstream = comp.get("downstream_names", [])
+            dep_notes: list[str] = []
+            if len(upstream) >= 3:
+                dep_notes.append(f"{len(upstream)} deps")
+            if len(downstream) >= 3:
+                dep_notes.append(f"used by {len(downstream)}")
+            if dep_notes:
+                parts.append(f"({', '.join(dep_notes)})")
+
+            detail = " — " + ", ".join(parts) if parts else ""
+            lines.append(f"- **{name}**{detail}")
+
+        remaining = len(comps) - show_limit
+        if remaining > 0:
+            rest_names = [c["name"] for c in ranked[show_limit:]]
+            lines.append(f"- *+{remaining} more*: {', '.join(rest_names)}")
+
+        lines.append("")
+
+
+def _append_dependency_hotspots(
+    lines: list[str],
+    components: list[dict[str, Any]],
+) -> None:
+    """Append high-impact dependency info (most-depended-on components)."""
+    # Find components depended on by 3+ others
+    hotspots: list[tuple[str, int]] = []
+    for comp in components:
+        downstream = comp.get("downstream_names", [])
+        if len(downstream) >= 3:
+            hotspots.append((comp["name"], len(downstream)))
+
+    if not hotspots:
+        return
+
+    hotspots.sort(key=lambda x: x[1], reverse=True)
+    lines.append("### Dependency Hotspots")
+    lines.append("Changes to these have wide blast radius:")
+    for name, count in hotspots[:6]:
+        lines.append(f"- **{name}** — {count} dependents")
+    lines.append("")
+
+
+def _append_gotcha_summary(
+    lines: list[str],
+    components: list[dict[str, Any]],
+    repo_path: Path,
+) -> None:
+    """Append condensed gotchas (only if there are notable ones)."""
+    gotchas: list[str] = []
+
+    # Large files
+    large_files = _find_large_files(repo_path, threshold=800)
+    if large_files:
+        top = large_files[0]
+        gotchas.append(f"`{top[0]}` is {top[1]} lines — consider splitting")
+
+    # High-dep services
+    for comp in components:
+        upstream = comp.get("upstream_names", comp.get("compose_depends_on", []))
+        if len(upstream) >= 8:
+            gotchas.append(
+                f"**{comp['name']}** has {len(upstream)} dependencies — wide blast radius"
+            )
+
+    # gRPC services
+    grpc_comps = [c for c in components if c.get("grpc_services")]
+    if grpc_comps:
+        names = ", ".join(c["name"] for c in grpc_comps[:3])
+        gotchas.append(f"gRPC services ({names}) — proto changes require stub regeneration")
+
+    if not gotchas:
+        return
+
+    lines.append("### Gotchas")
+    for g in gotchas[:5]:
+        lines.append(f"- {g}")
+    lines.append("")
 
 
 def _generate_domain_terms(
