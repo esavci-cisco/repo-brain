@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from repo_brain.config import RepoConfig
 from repo_brain.ingestion.embedder import generate_embeddings
-from repo_brain.storage.vector_store import VectorStore
+
+if TYPE_CHECKING:
+    from repo_brain.storage.vector_store import VectorStore
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +20,7 @@ def search_code(
     limit: int = 10,
     service_filter: str | None = None,
     language_filter: str | None = None,
+    vector_store: VectorStore | None = None,
 ) -> list[dict[str, Any]]:
     """Semantic search over indexed code.
 
@@ -27,6 +30,7 @@ def search_code(
         limit: Max results to return.
         service_filter: Optional filter by service name.
         language_filter: Optional filter by language.
+        vector_store: Optional pre-built VectorStore (avoids re-init).
 
     Returns:
         List of search results with file_path, snippet, score, metadata.
@@ -51,9 +55,12 @@ def search_code(
         else:
             where = {"$and": conditions}
 
-    # Query vector store
-    store = VectorStore(config)
-    raw_results = store.search(query_embedding, limit=limit, where=where)
+    # Query vector store (use cached instance if provided)
+    if vector_store is None:
+        from repo_brain.storage.vector_store import VectorStore
+
+        vector_store = VectorStore(config)
+    raw_results = vector_store.search(query_embedding, limit=limit, where=where)
 
     # Format results
     results: list[dict[str, Any]] = []

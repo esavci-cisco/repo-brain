@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from repo_brain.config import RepoConfig
-from repo_brain.storage.graph_store import GraphStore
+
+if TYPE_CHECKING:
+    from repo_brain.storage.graph_store import GraphStore
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +18,7 @@ def query_dependencies(
     config: RepoConfig,
     direction: str = "both",
     depth: int = 3,
+    graph_store: GraphStore | None = None,
 ) -> dict[str, Any]:
     """Query dependency graph for a module/service.
 
@@ -24,11 +27,17 @@ def query_dependencies(
         config: Repo configuration.
         direction: "up" (what it depends on), "down" (what depends on it), or "both".
         depth: How many levels deep to traverse.
+        graph_store: Optional pre-built GraphStore (avoids re-init).
 
     Returns:
         Dict with upstream, downstream dependencies and risk info.
     """
-    graph = GraphStore(config)
+    if graph_store is None:
+        from repo_brain.storage.graph_store import GraphStore
+
+        graph_store = GraphStore(config)
+
+    graph = graph_store
     result: dict[str, Any] = {
         "module": module,
         "found": False,

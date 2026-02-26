@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from repo_brain.config import RepoConfig
+
+if TYPE_CHECKING:
+    from repo_brain.storage.graph_store import GraphStore
+    from repo_brain.storage.vector_store import VectorStore
 
 logger = logging.getLogger(__name__)
 
@@ -19,11 +23,22 @@ def get_architecture(config: RepoConfig) -> str:
     return "No architecture document found. Run `repo-brain generate-docs` to create one."
 
 
-def get_service_info(service_name: str, config: RepoConfig) -> dict[str, Any]:
+def get_service_info(
+    service_name: str,
+    config: RepoConfig,
+    vector_store: VectorStore | None = None,
+    graph_store: GraphStore | None = None,
+) -> dict[str, Any]:
     """Return architecture info for a specific service.
 
     Combines data from architecture docs, service_map.json, the dependency graph,
     and semantic search to provide key files and entry points.
+
+    Args:
+        service_name: Name of the service.
+        config: Repo configuration.
+        vector_store: Optional pre-built VectorStore (avoids re-init).
+        graph_store: Optional pre-built GraphStore (avoids re-init).
     """
     result: dict[str, Any] = {
         "service": service_name,
@@ -58,10 +73,11 @@ def get_service_info(service_name: str, config: RepoConfig) -> dict[str, Any]:
 
     # Enrich with dependency graph data
     try:
-        from repo_brain.storage.graph_store import GraphStore
+        if graph_store is None:
+            from repo_brain.storage.graph_store import GraphStore
 
-        graph = GraphStore(config)
-        node_info = graph.get_node_info(service_name)
+            graph_store = GraphStore(config)
+        node_info = graph_store.get_node_info(service_name)
         if node_info:
             result["graph_info"] = {
                 "node_type": node_info.get("node_type", ""),
@@ -72,8 +88,8 @@ def get_service_info(service_name: str, config: RepoConfig) -> dict[str, Any]:
                 "upstream_count": node_info.get("upstream_count", 0),
                 "downstream_count": node_info.get("downstream_count", 0),
             }
-            result["upstream"] = graph.get_upstream(service_name, depth=2)
-            result["downstream"] = graph.get_downstream(service_name, depth=2)
+            result["upstream"] = graph_store.get_upstream(service_name, depth=2)
+            result["downstream"] = graph_store.get_downstream(service_name, depth=2)
     except Exception:
         pass
 
@@ -86,6 +102,7 @@ def get_service_info(service_name: str, config: RepoConfig) -> dict[str, Any]:
             config=config,
             limit=10,
             service_filter=service_name,
+            vector_store=vector_store,
         )
         if search_results:
             seen: set[str] = set()

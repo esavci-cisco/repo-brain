@@ -204,7 +204,89 @@ def save_generated_docs(config: RepoConfig) -> dict[str, str]:
     gotchas_path.write_text(gotchas_content)
     created["gotchas.md"] = str(gotchas_path)
 
+    # Inject repo-brain section into AGENTS.md (in repo root)
+    agents_result = inject_agents_md(config)
+    if agents_result:
+        created["AGENTS.md"] = agents_result
+
     return created
+
+
+# ── AGENTS.md injection ──────────────────────────────────────────────
+
+_AGENTS_SECTION_MARKER = "<!-- repo-brain:codebase-research -->"
+
+_AGENTS_SECTION_CONTENT = """\
+{marker}
+## Codebase Research
+
+This repo has a **repo-brain** MCP server with a pre-built index of the entire
+codebase. When researching the codebase (understanding architecture, planning
+tasks, finding code), prefer repo-brain tools over explore agents — they return
+instant results without filesystem scanning:
+
+- `scope_task(description)` — best starting point for planning: pass a Jira
+  ticket, feature request, or bug report to get affected services, key files,
+  dependencies, and risks
+- `search_code(query)` — semantic search by concept (e.g. "authentication
+  flow", "error handling in payments") rather than exact keyword
+- `get_architecture()` — full repo overview, service boundaries, data flows,
+  tech stack
+- `get_service_info(service_name)` — deep dive into one service's purpose,
+  dependencies, and key files
+- `query_dependencies(module)` — impact analysis: what depends on a module and
+  what it depends on
+
+Use explore agents and grep/glob only when you need to read specific files you
+already know about, or search for exact symbol names.
+{marker_end}"""
+
+
+def inject_agents_md(config: RepoConfig) -> str | None:
+    """Inject a 'Codebase Research' section into the repo's AGENTS.md.
+
+    - If AGENTS.md doesn't exist, creates it with just the repo-brain section.
+    - If it exists but lacks the section, appends it.
+    - If it already has the section (idempotent marker), replaces it in case
+      the content was updated.
+
+    Returns the path to AGENTS.md if written, or None if no change was needed.
+    """
+    repo_path = Path(config.path)
+    agents_path = repo_path / "AGENTS.md"
+
+    marker = _AGENTS_SECTION_MARKER
+    marker_end = marker.replace("-->", ":end -->")
+    section = _AGENTS_SECTION_CONTENT.format(marker=marker, marker_end=marker_end)
+
+    if agents_path.exists():
+        content = agents_path.read_text()
+
+        if marker in content:
+            # Replace existing section between markers
+            start = content.index(marker)
+            end_marker = marker.replace("-->", ":end -->")
+            if end_marker in content:
+                end = content.index(end_marker) + len(end_marker)
+                new_content = content[:start] + section + content[end:]
+            else:
+                # Marker exists but no end marker — append end marker
+                new_content = content[:start] + section + content[start + len(marker) :]
+            if new_content.rstrip() == content.rstrip():
+                return None  # No change needed
+            agents_path.write_text(new_content)
+        else:
+            # Append section to existing file
+            if not content.endswith("\n"):
+                content += "\n"
+            content += "\n" + section + "\n"
+            agents_path.write_text(content)
+    else:
+        # Create new AGENTS.md with just the repo-brain section
+        agents_path.write_text(section + "\n")
+
+    logger.info("Injected repo-brain section into %s", agents_path)
+    return str(agents_path)
 
 
 def _generate_domain_terms(
@@ -643,98 +725,6 @@ def _find_deep_directories(
 
     deep.sort()
     return deep[:10]  # Cap output
-
-
-def _generate_gotchas(
-    config: RepoConfig,
-    components: list[dict[str, Any]],
-    compose_info: dict[str, Any],
-    graph_data: dict[str, Any] | None,
-) -> str:
-    """Generate gotchas.md with auto-detected complexity hotspots and warnings."""
-    lines: list[str] = [
-        f"# Gotchas — {config.name}\n",
-        "Auto-detected complexity hotspots and dependency warnings.\n",
-    ]
-
-    # --- High-dependency services ---
-    high_dep: list[tuple[str, int, list[str]]] = []
-    for comp in components:
-        upstream = comp.get("upstream_names", comp.get("compose_depends_on", []))
-        if len(upstream) >= 4:
-            high_dep.append((comp["name"], len(upstream), upstream))
-
-    if high_dep:
-        high_dep.sort(key=lambda x: x[1], reverse=True)
-        lines.append("## High-Dependency Services\n")
-        lines.append(
-            "These services depend on many others — changes to their "
-            "dependencies have a wide blast radius.\n"
-        )
-        for name, count, deps in high_dep:
-            lines.append(f"- **{name}** ({count} dependencies): {', '.join(deps)}")
-        lines.append("")
-
-    # --- Heavily depended-on components ---
-    high_dependents: list[tuple[str, int, list[str]]] = []
-    for comp in components:
-        downstream = comp.get("downstream_names", [])
-        if len(downstream) >= 3:
-            high_dependents.append((comp["name"], len(downstream), downstream))
-
-    if high_dependents:
-        high_dependents.sort(key=lambda x: x[1], reverse=True)
-        lines.append("## Widely Used Components\n")
-        lines.append("Breaking changes in these components affect many consumers.\n")
-        for name, count, deps in high_dependents:
-            lines.append(f"- **{name}** (used by {count}): {', '.join(deps)}")
-        lines.append("")
-
-    # --- Init containers ---
-    init_services = [c for c in components if c.get("display_type") == "init"]
-    if init_services:
-        lines.append("## Init / Migration Containers\n")
-        lines.append("These must run before their dependent services are healthy.\n")
-        for comp in init_services:
-            upstream = comp.get("upstream_names", comp.get("compose_depends_on", []))
-            dep_str = f" (requires: {', '.join(upstream)})" if upstream else ""
-            lines.append(f"- **{comp['name']}**{dep_str}")
-        lines.append("")
-
-    # --- Shared data stores ---
-    store_users: dict[str, list[str]] = {}
-    for comp in components:
-        for store in comp.get("data_stores", []):
-            store_users.setdefault(store, []).append(comp["name"])
-
-    shared_stores = {s: users for s, users in store_users.items() if len(users) >= 2}
-    if shared_stores:
-        lines.append("## Shared Data Stores\n")
-        lines.append(
-            "Multiple services write to these stores — watch for "
-            "schema migration conflicts and race conditions.\n"
-        )
-        for store, users in sorted(shared_stores.items(), key=lambda x: len(x[1]), reverse=True):
-            lines.append(f"- **{store}** ({len(users)} services): {', '.join(users)}")
-        lines.append("")
-
-    # --- gRPC services ---
-    grpc_comps = [c for c in components if c.get("grpc_services")]
-    if grpc_comps:
-        lines.append("## gRPC Services\n")
-        lines.append("Proto changes require regenerating stubs in all consumers.\n")
-        for comp in grpc_comps:
-            lines.append(f"- **{comp['name']}**: {', '.join(comp['grpc_services'])}")
-        lines.append("")
-
-    if len(lines) <= 3:
-        lines.append("No gotchas detected automatically.\n")
-
-    lines.append("---\n")
-    lines.append(
-        "*Auto-generated by repo-brain. Re-running generate-docs will overwrite this file.*\n"
-    )
-    return "\n".join(lines)
 
 
 # --- Enrichment pipeline ---

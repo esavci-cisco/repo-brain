@@ -14,9 +14,13 @@ from __future__ import annotations
 
 import logging
 from collections import Counter
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from repo_brain.config import RepoConfig
+
+if TYPE_CHECKING:
+    from repo_brain.storage.graph_store import GraphStore
+    from repo_brain.storage.vector_store import VectorStore
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +30,8 @@ def scope_task(
     config: RepoConfig,
     search_limit: int = 20,
     dep_depth: int = 2,
+    vector_store: VectorStore | None = None,
+    graph_store: GraphStore | None = None,
 ) -> dict[str, Any]:
     """Scope a task by finding affected services, files, and dependencies.
 
@@ -34,6 +40,8 @@ def scope_task(
         config: Repo configuration.
         search_limit: How many search results to consider (default 20).
         dep_depth: How deep to traverse dependency graph (default 2).
+        vector_store: Optional pre-built VectorStore (avoids re-init).
+        graph_store: Optional pre-built GraphStore (avoids re-init).
 
     Returns:
         Structured scope analysis with affected services, files, deps, risks.
@@ -48,7 +56,9 @@ def scope_task(
     }
 
     # Step 1: Semantic search to find relevant code
-    search_results = _semantic_search(description, config, limit=search_limit)
+    search_results = _semantic_search(
+        description, config, limit=search_limit, vector_store=vector_store
+    )
 
     if not search_results:
         result["note"] = (
@@ -62,13 +72,13 @@ def scope_task(
     service_hits = _extract_services(search_results)
 
     # Step 3: For each affected service, pull graph data
-    graph_data = _get_graph_context(service_hits, config, depth=dep_depth)
+    graph_data = _get_graph_context(service_hits, config, depth=dep_depth, graph_store=graph_store)
 
     # Step 4: Build the key files list (deduplicated, ranked)
     key_files = _build_key_files(search_results)
 
     # Step 5: Build dependency map and risk assessment
-    dep_map, risks = _assess_dependencies(service_hits, graph_data, config)
+    dep_map, risks = _assess_dependencies(service_hits, graph_data, config, graph_store=graph_store)
 
     # Step 6: Build suggested reading order
     reading_order = _suggest_reading_order(service_hits, key_files, graph_data)
@@ -158,13 +168,21 @@ def format_scope_result(result: dict[str, Any]) -> str:
         lines.append(f"**Note**: {result['note']}")
         lines.append("")
 
-    # Post-call guidance — arrives after the tool is called, when the AI
-    # is deciding what to do next with the results.
+    # Post-call guidance — suggests follow-up repo-brain tools so the LLM
+    # continues using pre-indexed data rather than falling back to grep/glob.
     lines.append("---")
+    lines.append("**Next steps** (repo-brain tools for follow-up):")
     lines.append(
-        "**Next**: For research, pass these file paths to a Task agent for deep reading. "
-        "For implementation, Read only the files you plan to edit."
+        "- `search_code(query)` — find implementations of specific concepts mentioned above"
     )
+    if services:
+        svc_names = [s["service"] for s in services[:3]]
+        lines.append(f"- `get_service_info(service_name)` — get details on {', '.join(svc_names)}")
+    lines.append(
+        "- `query_dependencies(module)` — check what would break if you "
+        "change a module listed above"
+    )
+    lines.append("- For implementation, Read only the files you plan to edit.")
 
     return "\n".join(lines)
 
@@ -176,11 +194,12 @@ def _semantic_search(
     description: str,
     config: RepoConfig,
     limit: int = 20,
+    vector_store: VectorStore | None = None,
 ) -> list[dict[str, Any]]:
     """Run semantic search on the description text."""
     from repo_brain.tools.search import search_code
 
-    return search_code(query=description, config=config, limit=limit)
+    return search_code(query=description, config=config, limit=limit, vector_store=vector_store)
 
 
 def _extract_services(
@@ -238,12 +257,14 @@ def _get_graph_context(
     service_hits: list[dict[str, Any]],
     config: RepoConfig,
     depth: int = 2,
+    graph_store: GraphStore | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Pull dependency graph context for each affected service."""
     try:
-        from repo_brain.storage.graph_store import GraphStore
+        if graph_store is None:
+            from repo_brain.storage.graph_store import GraphStore
 
-        graph = GraphStore(config)
+            graph_store = GraphStore(config)
     except Exception:
         return {}
 
@@ -251,12 +272,12 @@ def _get_graph_context(
 
     for svc in service_hits:
         name = svc["service"]
-        node_info = graph.get_node_info(name)
+        node_info = graph_store.get_node_info(name)
         if not node_info:
             continue
 
-        upstream = graph.get_upstream(name, depth=depth)
-        downstream = graph.get_downstream(name, depth=depth)
+        upstream = graph_store.get_upstream(name, depth=depth)
+        downstream = graph_store.get_downstream(name, depth=depth)
 
         graph_data[name] = {
             "node_info": node_info,
@@ -303,6 +324,7 @@ def _assess_dependencies(
     service_hits: list[dict[str, Any]],
     graph_data: dict[str, dict[str, Any]],
     config: RepoConfig,
+    graph_store: GraphStore | None = None,
 ) -> tuple[dict[str, Any], list[str]]:
     """Build dependency map and risk assessment."""
     dep_map: dict[str, Any] = {}
@@ -347,14 +369,15 @@ def _assess_dependencies(
 
     # Check if shared libraries are in the affected set
     try:
-        from repo_brain.storage.graph_store import GraphStore
+        if graph_store is None:
+            from repo_brain.storage.graph_store import GraphStore
 
-        graph = GraphStore(config)
+            graph_store = GraphStore(config)
         for svc in service_hits:
             name = svc["service"]
-            node_info = graph.get_node_info(name)
+            node_info = graph_store.get_node_info(name)
             if node_info and node_info.get("node_type") == "library":
-                downstream = graph.get_downstream(name, depth=1)
+                downstream = graph_store.get_downstream(name, depth=1)
                 if len(downstream) > 5:
                     risks.append(
                         f"SHARED LIBRARY: {name} is used by {len(downstream)} modules. "
