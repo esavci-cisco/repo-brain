@@ -69,6 +69,7 @@ def scope_task(
         return result
 
     # Step 2: Extract affected services from search results
+    logger.info("Analyzing scope...")
     service_hits = _extract_services(search_results)
 
     # Step 3: For each affected service, pull graph data

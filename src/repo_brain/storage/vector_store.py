@@ -22,6 +22,7 @@ class VectorStore:
     def __init__(self, config: RepoConfig) -> None:
         self.config = config
         config.chroma_dir.mkdir(parents=True, exist_ok=True)
+        logger.info("Opening vector store...")
         self._client = chromadb.PersistentClient(
             path=str(config.chroma_dir),
             settings=Settings(anonymized_telemetry=False),

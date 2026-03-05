@@ -56,11 +56,13 @@ def search_code(
             where = {"$and": conditions}
 
     # Query vector store (use cached instance if provided)
+    logger.info("Searching index...")
     if vector_store is None:
         from repo_brain.storage.vector_store import VectorStore
 
         vector_store = VectorStore(config)
     raw_results = vector_store.search(query_embedding, limit=limit, where=where)
+    logger.info("Found %d results", len(raw_results))
 
     # Format results
     results: list[dict[str, Any]] = []
