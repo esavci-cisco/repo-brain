@@ -103,6 +103,12 @@ def format_scope_result(result: dict[str, Any]) -> str:
     lines.append("## Task Scope Analysis")
     lines.append("")
 
+    # Task description so the LLM knows what was scoped
+    desc = result.get("description_summary", "")
+    if desc:
+        lines.append(f"**Task**: {desc}")
+        lines.append("")
+
     # Affected services
     services = result.get("affected_services", [])
     if services:

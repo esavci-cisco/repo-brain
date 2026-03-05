@@ -57,8 +57,9 @@ description: Scope a task — find affected services, files, dependencies, and r
 !`repo-brain scope "$ARGUMENTS"`
 </repo-context>
 
-Use the scope analysis above to plan your approach. Read only the files
-listed under "Key Files" — do NOT do broad grep/glob for discovery.
+Plan and implement the task described above. Read the key files listed
+in the scope analysis, then proceed. Do NOT do broad grep/glob for
+discovery — the scoping already identified the relevant files.
 """
 
 _PLUGIN_TEMPLATE = """\
