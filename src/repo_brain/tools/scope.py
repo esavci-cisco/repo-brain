@@ -93,13 +93,9 @@ def scope_task(
 
 
 def format_scope_result(result: dict[str, Any]) -> str:
-    """Format scope result as human-readable markdown-ish text.
-
-    This is what the MCP tool returns to OpenCode.
-    """
+    """Format scope result as compact markdown for the MCP tool output."""
     lines: list[str] = []
 
-    # Header
     lines.append("## Task Scope Analysis")
     lines.append("")
 
@@ -112,77 +108,38 @@ def format_scope_result(result: dict[str, Any]) -> str:
             hits = svc["hit_count"]
             role = svc.get("role", "")
             role_str = f" — {role}" if role else ""
-            lines.append(f"- **{name}** ({hits} code matches){role_str}")
-            # Show graph info if available
+            deps_parts: list[str] = []
             if svc.get("upstream_deps"):
-                deps = ", ".join(svc["upstream_deps"][:5])
-                lines.append(f"  - Depends on: {deps}")
+                deps_parts.append(f"deps: {', '.join(svc['upstream_deps'][:4])}")
             if svc.get("downstream_deps"):
-                deps = ", ".join(svc["downstream_deps"][:5])
-                lines.append(f"  - Depended on by: {deps}")
+                deps_parts.append(f"used by: {', '.join(svc['downstream_deps'][:4])}")
+            deps_str = f" ({'; '.join(deps_parts)})" if deps_parts else ""
+            lines.append(f"- **{name}** ({hits} matches){role_str}{deps_str}")
         lines.append("")
 
-    # Key files
+    # Key files — compact: just file:line and symbol
     key_files = result.get("key_files", [])
     if key_files:
-        lines.append("### Key Files to Read")
-        for i, f in enumerate(key_files[:15], 1):
+        lines.append("### Key Files")
+        for f in key_files[:12]:
             symbol = ""
             if f.get("symbol_name"):
-                symbol = f" — {f['symbol_type']}: {f['symbol_name']}"
-            score = f.get("relevance_score", "")
-            score_str = f" [relevance: {score}]" if score else ""
-            lines.append(f"{i}. `{f['file_path']}`{symbol}{score_str}")
-        lines.append("")
-
-    # Dependencies
-    dep_map = result.get("dependencies", {})
-    if dep_map:
-        lines.append("### Dependency Context")
-        for module, info in dep_map.items():
-            direction = info.get("direction", "")
-            items = info.get("items", [])
-            if items:
-                item_names = ", ".join(items[:8])
-                lines.append(f"- **{module}** ({direction}): {item_names}")
+                symbol = f" — {f['symbol_name']}"
+            lines.append(f"- `{f['file_path']}`{symbol}")
         lines.append("")
 
     # Risk assessment
     risks = result.get("risk_assessment", [])
     if risks:
-        lines.append("### Risk Assessment")
+        lines.append("### Risks")
         for risk in risks:
             lines.append(f"- {risk}")
-        lines.append("")
-
-    # Reading order
-    reading_order = result.get("suggested_reading_order", [])
-    if reading_order:
-        lines.append("### Suggested Reading Order")
-        for i, item in enumerate(reading_order, 1):
-            lines.append(f"{i}. {item}")
         lines.append("")
 
     # Note
     if result.get("note"):
         lines.append(f"**Note**: {result['note']}")
         lines.append("")
-
-    # Post-call guidance — suggests follow-up repo-brain tools so the LLM
-    # continues using pre-indexed data rather than falling back to grep/glob.
-    lines.append("---")
-    lines.append("**Next steps** (repo-brain tools for follow-up):")
-    lines.append(
-        "- `search_code(query)` — find implementations of specific concepts mentioned above"
-    )
-    if services:
-        svc_names = [s["service"] for s in services[:3]]
-        lines.append(f"- `get_service_info(service_name)` — get details on {', '.join(svc_names)}")
-    lines.append(
-        "- `query_dependencies(module)` — check what would break if you "
-        "change a module listed above"
-    )
-    lines.append("- For implementation, Read only the files you plan to edit.")
 
     return "\n".join(lines)
 

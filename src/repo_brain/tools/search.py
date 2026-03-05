@@ -75,7 +75,7 @@ def search_code(
             "line_start": meta.get("line_start", 0),
             "line_end": meta.get("line_end", 0),
             "score": round(item.get("score", 0.0), 4),
-            "snippet": _extract_snippet(item.get("document", ""), max_lines=20),
+            "snippet": _extract_snippet(item.get("document", ""), max_lines=5),
         }
         results.append(result)
 
