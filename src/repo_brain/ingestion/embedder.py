@@ -1,19 +1,21 @@
-"""Embedding generation wrapper."""
+"""Embedding generation wrapper.
+
+Only used during indexing (``repo-brain index`` / ``repo-brain setup``).
+Query-time code paths use ChromaDB's built-in ONNX embedding instead,
+so ``torch`` and ``sentence-transformers`` are never imported at query time.
+"""
 
 from __future__ import annotations
 
 import logging
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from sentence_transformers import SentenceTransformer
 
 logger = logging.getLogger(__name__)
 
-# Lazy-loaded model cache
-_model_cache: dict[str, SentenceTransformer] = {}
+# Lazy-loaded model cache.  Values are ``SentenceTransformer`` instances but
+# we type as ``Any`` to avoid importing the heavy library at module level.
+_model_cache: dict[str, object] = {}
 
 
 def _local_model_dir(model_name: str) -> Path:
@@ -48,7 +50,7 @@ def export_model(model_name: str = "all-MiniLM-L6-v2") -> Path:
     return local_dir
 
 
-def get_model(model_name: str) -> SentenceTransformer:
+def get_model(model_name: str) -> object:
     """Get or load an embedding model. Lazy-loaded for fast startup."""
     if model_name not in _model_cache:
         logger.info("Loading embedding model: %s", model_name)

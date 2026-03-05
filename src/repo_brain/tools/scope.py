@@ -14,13 +14,11 @@ from __future__ import annotations
 
 import logging
 from collections import Counter
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from repo_brain.config import RepoConfig
-
-if TYPE_CHECKING:
-    from repo_brain.storage.graph_store import GraphStore
-    from repo_brain.storage.vector_store import VectorStore
+from repo_brain.storage.graph_store import GraphStore
+from repo_brain.storage.vector_store import VectorStore
 
 logger = logging.getLogger(__name__)
 

@@ -177,7 +177,15 @@ def _flush_batch(
     metadatas: list[dict],
 ) -> None:
     """Generate embeddings and store a batch of chunks."""
-    from repo_brain.ingestion.embedder import generate_embeddings
+    try:
+        from repo_brain.ingestion.embedder import generate_embeddings
+    except ImportError:
+        click.echo(
+            "Error: sentence-transformers is required for indexing.\n"
+            "Install it with: uv pip install 'repo-brain[index]'",
+            err=True,
+        )
+        raise SystemExit(1)
 
     embeddings = generate_embeddings(documents, model_name=config.embedding_model)  # type: ignore[union-attr]
     store.add_chunks(ids, documents, embeddings, metadatas)  # type: ignore[union-attr]
@@ -522,9 +530,17 @@ def export_model_cmd() -> None:
     One-time operation. Downloads the model and saves it to ~/.repo-brain/models/.
     Future searches load from local disk with no network calls.
     """
-    from repo_brain.ingestion.embedder import export_model
-
     click.echo("Saving embedding model locally (one-time)...")
+    try:
+        from repo_brain.ingestion.embedder import export_model
+    except ImportError:
+        click.echo(
+            "Error: sentence-transformers is required for model export.\n"
+            "Install it with: uv pip install 'repo-brain[index]'",
+            err=True,
+        )
+        raise SystemExit(1)
+
     try:
         model_dir = export_model()
         click.echo(f"Done. Model saved to: {model_dir}")

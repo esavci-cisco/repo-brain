@@ -63,104 +63,48 @@ discovery — the scoping already identified the relevant files.
 """
 
 _PLUGIN_TEMPLATE = """\
-import type { Plugin } from "opencode";
-import { execSync } from "child_process";
+import type { Plugin } from "@opencode-ai/plugin";
 
 /**
  * repo-brain plugin for OpenCode.
  *
- * Hooks:
+ * Events:
  *   session.created  — regenerate the repo map so the system prompt is fresh.
- *   chat.message     — automatically inject relevant code context into every
- *                      user message before the LLM sees it (push architecture).
  *
- * The /q and /scope commands remain available as explicit power-user overrides.
+ * The /q and /scope commands remain available for explicit context injection.
+ *
+ * NOTE: OpenCode's plugin API does not currently offer a hook that fires
+ * before a user message is sent to the LLM, so per-message auto-context
+ * injection is not yet possible.  When OpenCode adds such a hook, this
+ * plugin can be extended to inject repo-brain context automatically.
  */
 
-/** Minimum message length to trigger context injection. */
-const MIN_MESSAGE_LENGTH = 20;
-
-/**
- * Patterns that indicate the user is giving a short conversational reply
- * rather than asking a substantive question that would benefit from context.
- */
-const SKIP_PATTERNS = [
-  /^(yes|no|ok|okay|sure|thanks|thank you)\\.?$/i,
-  /^(yep|nope|nah|right|got it|lgtm)\\.?$/i,
-  /^(done|cancel|stop|go ahead|please|correct)\\.?$/i,
-];
-
-/**
- * Extract the user's text from message parts.
- * Parts may include tool results, images, etc. — we only want text.
- */
-function extractUserText(parts: any[]): string {
-  return parts
-    .filter((p: any) => p.type === "text")
-    .map((p: any) => p.text)
-    .join(" ")
-    .trim();
-}
-
-/**
- * Decide whether a message is worth enriching with context.
- * Returns false for trivial replies, very short messages, or messages
- * that already contain context (e.g. from /q or /scope commands).
- */
-function shouldInjectContext(text: string): boolean {
-  if (text.length < MIN_MESSAGE_LENGTH) return false;
-  if (SKIP_PATTERNS.some((p) => p.test(text))) return false;
-  // If the message already has repo-context (e.g. from /q), skip.
-  if (text.includes("<repo-context>")) return false;
-  return true;
-}
-
-export default {
-  name: "repo-brain",
-  hooks: {
-    "session.created": async (_session) => {
-      try {
-        execSync("repo-brain generate-map", {
-          stdio: "ignore",
-          timeout: 30_000,
-        });
-      } catch {
-        // Non-fatal — map may be stale but session should still work.
-        console.error("[repo-brain] Failed to refresh repo map");
+export const RepoBrain: Plugin = async ({ client, $ }) => {
+  return {
+    event: async ({ event }) => {
+      if (event.type === "session.created") {
+        try {
+          await $`repo-brain generate-map`.quiet();
+          await client.app.log({
+            body: {
+              service: "repo-brain",
+              level: "info",
+              message: "Repo map refreshed",
+            },
+          });
+        } catch {
+          await client.app.log({
+            body: {
+              service: "repo-brain",
+              level: "warn",
+              message: "Failed to refresh repo map",
+            },
+          });
+        }
       }
     },
-
-    "chat.message": async (_input, output) => {
-      try {
-        const userText = extractUserText(output.parts);
-        if (!shouldInjectContext(userText)) return;
-
-        // Shell out to repo-brain context.  Use a short limit (2 chunks)
-        // to keep token overhead low — this runs on every message.
-        const escaped = userText.replace(/"/g, '\\\\"').substring(0, 300);
-        const context = execSync(
-          `repo-brain context "${escaped}" --limit 2`,
-          { encoding: "utf-8", timeout: 10_000 },
-        ).trim();
-
-        // Only inject if we got meaningful results
-        if (!context || context.includes("No relevant code found")) return;
-
-        output.parts.push({
-          type: "text",
-          text: [
-            "",
-            "<repo-context>",
-            context,
-            "</repo-context>",
-          ].join("\\n"),
-        });
-      } catch {
-        // Non-fatal — message goes through without enrichment.
-      }
-    },
-  },
-} satisfies Plugin;
+  };
+};
 """
 
 

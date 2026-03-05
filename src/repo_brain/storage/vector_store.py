@@ -70,27 +70,6 @@ class VectorStore:
                 )
         logger.info("Stored %d chunks in vector store", len(ids))
 
-    def search(
-        self,
-        query_embedding: list[float],
-        limit: int = 10,
-        where: dict[str, Any] | None = None,
-    ) -> list[dict[str, Any]]:
-        """Search for similar chunks by pre-computed embedding.
-
-        Returns list of dicts with keys: id, document, metadata, distance.
-        """
-        kwargs: dict[str, Any] = {
-            "query_embeddings": [query_embedding],
-            "n_results": limit,
-            "include": ["documents", "metadatas", "distances"],
-        }
-        if where:
-            kwargs["where"] = where
-
-        results = self._collection.query(**kwargs)
-        return self._parse_results(results)
-
     def search_by_text(
         self,
         query: str,
