@@ -3,13 +3,10 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from repo_brain.config import RepoConfig
-from repo_brain.ingestion.embedder import generate_embeddings
-
-if TYPE_CHECKING:
-    from repo_brain.storage.vector_store import VectorStore
+from repo_brain.storage.vector_store import VectorStore
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +21,10 @@ def search_code(
 ) -> list[dict[str, Any]]:
     """Semantic search over indexed code.
 
+    Uses ChromaDB's built-in embedding function (onnxruntime) at query time
+    to avoid importing torch/sentence-transformers — cuts latency from ~10s
+    to ~1s.
+
     Args:
         query: Natural language search query.
         config: Repo configuration.
@@ -35,13 +36,6 @@ def search_code(
     Returns:
         List of search results with file_path, snippet, score, metadata.
     """
-    # Generate embedding for the query
-    embeddings = generate_embeddings([query], model_name=config.embedding_model)
-    if not embeddings:
-        return []
-
-    query_embedding = embeddings[0]
-
     # Build optional filter
     where: dict[str, Any] | None = None
     if service_filter or language_filter:
@@ -55,13 +49,12 @@ def search_code(
         else:
             where = {"$and": conditions}
 
-    # Query vector store (use cached instance if provided)
+    # Query vector store — let ChromaDB embed the query internally
+    # (uses onnxruntime, no torch import needed)
     logger.info("Searching index...")
     if vector_store is None:
-        from repo_brain.storage.vector_store import VectorStore
-
         vector_store = VectorStore(config)
-    raw_results = vector_store.search(query_embedding, limit=limit, where=where)
+    raw_results = vector_store.search_by_text(query, limit=limit, where=where)
     logger.info("Found %d results", len(raw_results))
 
     # Format results

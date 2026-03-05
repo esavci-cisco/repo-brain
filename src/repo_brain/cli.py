@@ -249,6 +249,7 @@ def context(query: str, limit: int, repo: str | None) -> None:
     Output is injected into the LLM prompt before the model sees the
     user's message — it's a "push" context mechanism.
     """
+    click.echo("Loading repo-brain...", err=True)
     config = _resolve_config(repo)
     if not config:
         raise SystemExit(1)
@@ -300,6 +301,7 @@ def scope(description: str, repo: str | None) -> None:
     Output is injected into the LLM prompt to give the model awareness
     of the blast radius before it starts working.
     """
+    click.echo("Loading repo-brain...", err=True)
     config = _resolve_config(repo)
     if not config:
         raise SystemExit(1)

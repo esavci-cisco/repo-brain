@@ -76,7 +76,7 @@ class VectorStore:
         limit: int = 10,
         where: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
-        """Search for similar chunks.
+        """Search for similar chunks by pre-computed embedding.
 
         Returns list of dicts with keys: id, document, metadata, distance.
         """
@@ -89,6 +89,33 @@ class VectorStore:
             kwargs["where"] = where
 
         results = self._collection.query(**kwargs)
+        return self._parse_results(results)
+
+    def search_by_text(
+        self,
+        query: str,
+        limit: int = 10,
+        where: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Search for similar chunks using ChromaDB's built-in embedding.
+
+        Uses ChromaDB's default embedding function (all-MiniLM-L6-v2 via
+        onnxruntime) — avoids importing torch/sentence-transformers entirely,
+        cutting query latency from ~10s to ~1s.
+        """
+        kwargs: dict[str, Any] = {
+            "query_texts": [query],
+            "n_results": limit,
+            "include": ["documents", "metadatas", "distances"],
+        }
+        if where:
+            kwargs["where"] = where
+
+        results = self._collection.query(**kwargs)
+        return self._parse_results(results)
+
+    def _parse_results(self, results: dict[str, Any]) -> list[dict[str, Any]]:
+        """Parse raw ChromaDB query results into a flat list."""
 
         items: list[dict[str, Any]] = []
         if not results["ids"] or not results["ids"][0]:
