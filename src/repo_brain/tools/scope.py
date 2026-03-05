@@ -93,7 +93,10 @@ def scope_task(
 
 
 def format_scope_result(result: dict[str, Any]) -> str:
-    """Format scope result as compact markdown for the MCP tool output."""
+    """Format scope result as human-readable markdown-ish text.
+
+    This is what the ``/scope`` custom command returns to OpenCode.
+    """
     lines: list[str] = []
 
     lines.append("## Task Scope Analysis")
@@ -140,6 +143,14 @@ def format_scope_result(result: dict[str, Any]) -> str:
     if result.get("note"):
         lines.append(f"**Note**: {result['note']}")
         lines.append("")
+
+    # Post-call guidance — suggests follow-up actions so the LLM
+    # continues using pre-indexed data rather than falling back to grep/glob.
+    lines.append("---")
+    lines.append("**Next steps**:")
+    lines.append("- `/q <query>` — find implementations of specific concepts mentioned above")
+    lines.append("- Read only the files listed under 'Key Files to Read'")
+    lines.append("- Do NOT do broad grep/glob searches — the scoping already did discovery")
 
     return "\n".join(lines)
 

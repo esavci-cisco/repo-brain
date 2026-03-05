@@ -8,6 +8,8 @@ import time
 
 import click
 
+from repo_brain.config import RepoConfig
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(message)s",
@@ -38,12 +40,7 @@ def init(repo_path: str, name: str | None) -> None:
         click.echo(f"  Data dir: {config.data_dir}")
         click.echo()
         click.echo("Next steps:")
-        click.echo("  repo-brain setup   # Index, build graph, generate docs (all-in-one)")
-        click.echo()
-        click.echo("Or run individually:")
-        click.echo("  repo-brain index          # Index the codebase")
-        click.echo("  repo-brain build-graph    # Build dependency graph")
-        click.echo("  repo-brain generate-docs  # Generate architecture docs")
+        click.echo("  repo-brain setup   # Index, build graph, generate map (all-in-one)")
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         raise SystemExit(1)
@@ -238,6 +235,127 @@ def search(
         click.echo()
 
 
+# ── Shadow context command (for /q) ─────────────────────────────────
+
+
+@cli.command()
+@click.argument("query")
+@click.option("--limit", "-l", default=3, help="Max chunks to return")
+@click.option("--repo", "-r", default=None, help="Repo name or path")
+def context(query: str, limit: int, repo: str | None) -> None:
+    """Return formatted code context for a query (used by /q command).
+
+    This is designed to be called by OpenCode's custom /q command.
+    Output is injected into the LLM prompt before the model sees the
+    user's message — it's a "push" context mechanism.
+    """
+    config = _resolve_config(repo)
+    if not config:
+        raise SystemExit(1)
+
+    from repo_brain.tools.search import search_code
+
+    results = search_code(query=query, config=config, limit=limit)
+
+    if not results:
+        # Still output something useful so the LLM knows the search ran
+        click.echo("No relevant code found in the index for this query.")
+        click.echo("The codebase index may be empty — try `repo-brain setup`.")
+        return
+
+    click.echo(f"## Relevant Code ({len(results)} chunks)")
+    click.echo()
+
+    for i, r in enumerate(results, 1):
+        path = r["file_path"]
+        symbol = r["symbol_name"]
+        stype = r["symbol_type"]
+        lang = r["language"]
+        line_start = r["line_start"]
+        line_end = r["line_end"]
+
+        header = f"### {i}. `{path}`"
+        if symbol:
+            header += f" — {stype}: `{symbol}`"
+        header += f" (lines {line_start}-{line_end})"
+        click.echo(header)
+
+        if r["snippet"]:
+            click.echo(f"```{lang}")
+            click.echo(r["snippet"])
+            click.echo("```")
+        click.echo()
+
+
+# ── Task scoping command (for /scope) ────────────────────────────────
+
+
+@cli.command()
+@click.argument("description")
+@click.option("--repo", "-r", default=None, help="Repo name or path")
+def scope(description: str, repo: str | None) -> None:
+    """Scope a task — find affected services, files, and risks (used by /scope command).
+
+    This is designed to be called by OpenCode's custom /scope command.
+    Output is injected into the LLM prompt to give the model awareness
+    of the blast radius before it starts working.
+    """
+    config = _resolve_config(repo)
+    if not config:
+        raise SystemExit(1)
+
+    from repo_brain.tools.scope import format_scope_result, scope_task
+
+    result = scope_task(description=description, config=config)
+    click.echo(format_scope_result(result))
+
+
+# ── Repo map generation ─────────────────────────────────────────────
+
+
+@cli.command("generate-map")
+@click.option("--repo", "-r", default=None, help="Repo name or path")
+def generate_map(repo: str | None) -> None:
+    """Generate the repo map (.repo-brain/repomap.md).
+
+    Parses all supported source files with Tree-sitter and extracts
+    structural information (classes, functions, signatures).  The map
+    is saved to .repo-brain/repomap.md in the target repository.
+    """
+    config = _resolve_config(repo)
+    if not config:
+        raise SystemExit(1)
+
+    from repo_brain.generators.repomap import save_repo_map
+
+    click.echo(f"Generating repo map for: {config.name}")
+    output_path = save_repo_map(config)
+    click.echo(f"  Wrote: {output_path}")
+
+
+# ── OpenCode integration generation ─────────────────────────────────
+
+
+@cli.command("generate-opencode")
+@click.option("--repo", "-r", default=None, help="Repo name or path")
+def generate_opencode(repo: str | None) -> None:
+    """Generate OpenCode integration files (commands, plugin, opencode.json patch)."""
+    config = _resolve_config(repo)
+    if not config:
+        raise SystemExit(1)
+
+    from repo_brain.generators.opencode import generate_opencode_files
+
+    click.echo(f"Generating OpenCode integration for: {config.name}")
+    created = generate_opencode_files(config)
+
+    for desc, path in created.items():
+        click.echo(f"  {desc}: {path}")
+
+
+# ── Existing commands ────────────────────────────────────────────────
+
+
 @cli.command()
 @click.option("--repo", "-r", default=None, help="Repo name or path")
 def status(repo: str | None) -> None:
@@ -284,51 +402,43 @@ def status(repo: str | None) -> None:
         click.echo(f"  Chunks: {run['chunks_created']}")
 
 
-@cli.command("generate-docs")
-@click.option("--repo", "-r", default=None, help="Repo name or path")
-def generate_docs(repo: str | None) -> None:
-    """Generate architecture documentation (one-shot)."""
-    config = _resolve_config(repo)
-    if not config:
-        raise SystemExit(1)
-
-    from repo_brain.generators.architecture import save_generated_docs
-
-    click.echo(f"Generating docs for: {config.name}")
-    created = save_generated_docs(config)
-
-    for name, path in created.items():
-        click.echo(f"  Created: {name} -> {path}")
-
-    click.echo()
-    click.echo("These docs are a starting point. Edit them to add domain knowledge.")
-
-
 @cli.command()
 @click.option("--full", is_flag=True, help="Full re-index (delete existing and rebuild)")
 @click.option("--repo", "-r", default=None, help="Repo name or path")
 @click.pass_context
 def setup(ctx: click.Context, full: bool, repo: str | None) -> None:
-    """Run the full pipeline: index, build-graph, generate-docs."""
+    """Run the full pipeline: index, build-graph, generate-map, generate-opencode."""
     click.echo("=" * 40)
-    click.echo("Step 1/3: Indexing")
+    click.echo("Step 1/4: Indexing")
     click.echo("=" * 40)
     ctx.invoke(index, full=full, repo=repo)
 
     click.echo()
     click.echo("=" * 40)
-    click.echo("Step 2/3: Building dependency graph")
+    click.echo("Step 2/4: Building dependency graph")
     click.echo("=" * 40)
     ctx.invoke(build_graph_cmd, repo=repo)
 
     click.echo()
     click.echo("=" * 40)
-    click.echo("Step 3/3: Generating docs")
+    click.echo("Step 3/4: Generating repo map")
     click.echo("=" * 40)
-    ctx.invoke(generate_docs, repo=repo)
+    ctx.invoke(generate_map, repo=repo)
 
     click.echo()
-    click.echo("Setup complete. repo-brain is ready to use.")
+    click.echo("=" * 40)
+    click.echo("Step 4/4: Generating OpenCode integration")
+    click.echo("=" * 40)
+    ctx.invoke(generate_opencode, repo=repo)
+
+    click.echo()
+    click.echo("Setup complete. repo-brain is ready.")
+    click.echo()
+    click.echo("OpenCode will now:")
+    click.echo("  - Load .repo-brain/repomap.md into every system prompt")
+    click.echo("  - Support /q <query> for semantic code search")
+    click.echo("  - Support /scope <description> for task scoping")
+    click.echo("  - Auto-refresh the repo map on session start")
 
 
 @cli.command("build-graph")
@@ -403,15 +513,6 @@ def list_repos() -> None:
         click.echo()
 
 
-@cli.command()
-def serve() -> None:
-    """Start the MCP server (usually OpenCode does this automatically)."""
-    click.echo("Starting MCP server on stdio...", err=True)
-    from repo_brain.mcp_server import main
-
-    main()
-
-
 @cli.command("export-model")
 def export_model_cmd() -> None:
     """Save the embedding model locally for faster search.
@@ -431,7 +532,7 @@ def export_model_cmd() -> None:
         raise SystemExit(1)
 
 
-def _resolve_config(repo: str | None) -> object | None:
+def _resolve_config(repo: str | None) -> RepoConfig | None:
     """Resolve repo config from CLI arg, CWD, or first registered repo."""
     import os
 
@@ -443,7 +544,7 @@ def _resolve_config(repo: str | None) -> object | None:
 
     if repo:
         # Try as slug first
-        config = load_repo_config(repo)
+        config: RepoConfig | None = load_repo_config(repo)
         if config:
             return config
         # Try as path
