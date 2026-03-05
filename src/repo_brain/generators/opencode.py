@@ -39,16 +39,13 @@ _Q_COMMAND_TEMPLATE = """\
 description: Search the codebase semantically and inject relevant code context
 ---
 
-Find code relevant to the user's query using the repo-brain vector index.
-
-<context>
+<repo-context source="/q">
 !`repo-brain context "$ARGUMENTS"`
-</context>
+</repo-context>
 
-Use the context above to answer the user's question.  If the context is
-insufficient, tell the user and suggest they refine their query.
-Do NOT re-search with grep/glob — the vector search already found the
-most semantically relevant chunks.
+Use the code context above to answer the question. Do NOT re-search with
+grep/glob — the vector search already found the most relevant chunks.
+If the context is insufficient, say so and suggest refining the query.
 """
 
 _SCOPE_COMMAND_TEMPLATE = """\
@@ -56,16 +53,12 @@ _SCOPE_COMMAND_TEMPLATE = """\
 description: Scope a task — find affected services, files, dependencies, and risks
 ---
 
-Analyze the blast radius of the described task using the repo-brain index
-and dependency graph.
-
-<context>
+<repo-context source="/scope">
 !`repo-brain scope "$ARGUMENTS"`
-</context>
+</repo-context>
 
-Use the scope analysis above to understand what is affected before making
-changes.  Read only the files listed under "Key Files to Read" — do NOT
-do broad grep/glob searches for discovery, the scoping already did that.
+Use the scope analysis above to plan your approach. Read only the files
+listed under "Key Files" — do NOT do broad grep/glob for discovery.
 """
 
 _PLUGIN_TEMPLATE = """\

@@ -397,6 +397,29 @@ def extract_file_symbols(file_path: Path, repo_root: Path) -> FileSymbols | None
 # ── Ranking ──────────────────────────────────────────────────────────
 
 
+def _is_test_file(rel_path: str) -> bool:
+    """Check if a file is a test file (low value for repo map)."""
+    parts = rel_path.replace("\\", "/").split("/")
+    basename = parts[-1] if parts else ""
+
+    # Directory-level test indicators
+    for part in parts:
+        if part in ("tests", "test", "__tests__", "spec", "specs", "fixtures"):
+            return True
+
+    # File-level test indicators
+    if basename.startswith("test_") or basename.endswith("_test.py"):
+        return True
+    if basename.endswith((".test.ts", ".test.tsx", ".test.js", ".test.jsx")):
+        return True
+    if basename.endswith((".spec.ts", ".spec.tsx", ".spec.js", ".spec.jsx")):
+        return True
+    if basename.startswith("conftest"):
+        return True
+
+    return False
+
+
 def _rank_files_by_references(
     all_files: list[FileSymbols],
     graph_store: Any | None = None,
@@ -405,7 +428,11 @@ def _rank_files_by_references(
 
     Files with more symbols and graph connections are ranked higher.
     If a graph store is available, nodes with more dependents get a boost.
+    Test files are excluded entirely.
     """
+    # Filter out test files — they inflate the map with low-value symbols
+    all_files = [fs for fs in all_files if not _is_test_file(fs.rel_path)]
+
     scores: dict[str, float] = {}
 
     # Base score: number of symbols (classes worth more than functions)
@@ -414,7 +441,7 @@ def _rank_files_by_references(
         for sym in fs.symbols:
             if sym.kind in ("class", "struct", "interface"):
                 score += 3.0
-                score += len(sym.children) * 0.5
+                score += min(len(sym.children) * 0.5, 5.0)
             elif sym.kind == "function":
                 score += 1.0
             elif sym.kind == "type":
@@ -443,23 +470,43 @@ def _rank_files_by_references(
 
 # ── Formatting ───────────────────────────────────────────────────────
 
+# Approximate token budget.  1 token ≈ 4 chars in code-like text.
+_TOKEN_BUDGET = 2000
+_CHAR_BUDGET = _TOKEN_BUDGET * 4  # ~8 000 chars
 
-def _format_symbol(sym: Symbol, indent: int = 1) -> str:
-    """Format a single symbol as a compact line."""
+# Max top-level symbols to show per file.
+_MAX_SYMBOLS_PER_FILE = 8
+
+# Max methods to show per class/interface.  Beyond this we summarize.
+_MAX_METHODS_PER_SYMBOL = 3
+
+
+def _format_symbol_compact(sym: Symbol, indent: int = 1) -> str:
+    """Format a symbol compactly, collapsing children beyond the limit."""
     prefix = "  " * indent
     line = f"{prefix}{sym.signature}"
 
-    if sym.children:
-        child_lines = [_format_symbol(child, indent + 1) for child in sym.children]
-        return line + "\n" + "\n".join(child_lines)
-    return line
+    if not sym.children:
+        return line
+
+    shown = sym.children[:_MAX_METHODS_PER_SYMBOL]
+    hidden = len(sym.children) - len(shown)
+
+    child_lines = [f"{'  ' * (indent + 1)}{c.signature}" for c in shown]
+    if hidden > 0:
+        child_lines.append(f"{'  ' * (indent + 1)}... +{hidden} more")
+
+    return line + "\n" + "\n".join(child_lines)
 
 
-def format_repo_map(files: list[FileSymbols]) -> str:
+def format_repo_map(
+    files: list[FileSymbols],
+    char_budget: int = _CHAR_BUDGET,
+) -> str:
     """Format extracted symbols into a compact repo map string.
 
-    Output is designed to fit within ~2000 tokens and be readable
-    by an LLM as part of a system prompt.
+    Stops adding files once the character budget is reached (~2K tokens).
+    Symbols per file are capped and methods are collapsed.
     """
     lines: list[str] = []
     lines.append("# Repository Map")
@@ -468,11 +515,36 @@ def format_repo_map(files: list[FileSymbols]) -> str:
     lines.append("Use this to understand what exists and where before reading files.")
     lines.append("")
 
+    total_chars = sum(len(ln) + 1 for ln in lines)  # +1 for newline
+
     for fs in files:
-        lines.append(f"## {fs.rel_path}")
-        for sym in fs.symbols:
-            lines.append(_format_symbol(sym))
-        lines.append("")
+        # Build this file's block first, then check budget
+        file_lines: list[str] = []
+        file_lines.append(f"## {fs.rel_path}")
+
+        symbols_to_show = fs.symbols[:_MAX_SYMBOLS_PER_FILE]
+        hidden_symbols = len(fs.symbols) - len(symbols_to_show)
+
+        for sym in symbols_to_show:
+            file_lines.append(_format_symbol_compact(sym))
+
+        if hidden_symbols > 0:
+            file_lines.append(f"  ... +{hidden_symbols} more symbols")
+
+        file_lines.append("")
+
+        block_chars = sum(len(ln) + 1 for ln in file_lines)
+
+        if total_chars + block_chars > char_budget:
+            # Budget exhausted — note how many files were skipped
+            remaining = len(files) - len([ln for ln in lines if ln.startswith("## ")])
+            if remaining > 0:
+                lines.append(f"*... {remaining} more files omitted*")
+                lines.append("")
+            break
+
+        lines.extend(file_lines)
+        total_chars += block_chars
 
     return "\n".join(lines)
 
