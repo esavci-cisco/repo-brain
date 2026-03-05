@@ -71,7 +71,9 @@ def scope_task(
     service_hits = _extract_services(search_results)
 
     # Step 3: For each affected service, pull graph data
-    graph_data = _get_graph_context(service_hits, config, depth=dep_depth, graph_store=graph_store)
+    graph_data, graph_store = _get_graph_context(
+        service_hits, config, depth=dep_depth, graph_store=graph_store
+    )
 
     # Step 4: Build the key files list (deduplicated, ranked)
     key_files = _build_key_files(search_results)
@@ -231,15 +233,19 @@ def _get_graph_context(
     config: RepoConfig,
     depth: int = 2,
     graph_store: GraphStore | None = None,
-) -> dict[str, dict[str, Any]]:
-    """Pull dependency graph context for each affected service."""
+) -> tuple[dict[str, dict[str, Any]], GraphStore | None]:
+    """Pull dependency graph context for each affected service.
+
+    Returns:
+        Tuple of (graph_data dict, GraphStore instance that was used).
+        The caller should pass the returned GraphStore to downstream functions
+        to avoid re-initializing it.
+    """
     try:
         if graph_store is None:
-            from repo_brain.storage.graph_store import GraphStore
-
             graph_store = GraphStore(config)
     except Exception:
-        return {}
+        return {}, None
 
     graph_data: dict[str, dict[str, Any]] = {}
 
@@ -263,7 +269,7 @@ def _get_graph_context(
         svc["downstream_deps"] = [d["name"] for d in downstream]
         svc["role"] = node_info.get("description", "")
 
-    return graph_data
+    return graph_data, graph_store
 
 
 def _build_key_files(
@@ -343,8 +349,6 @@ def _assess_dependencies(
     # Check if shared libraries are in the affected set
     try:
         if graph_store is None:
-            from repo_brain.storage.graph_store import GraphStore
-
             graph_store = GraphStore(config)
         for svc in service_hits:
             name = svc["service"]
