@@ -408,10 +408,8 @@ _VENDORED_DIR_PATTERNS: set[str] = {
     "external",
     "extern",
     "deps",
-    "lib",  # often vendored JS
-    "assets",
-    "static",
-    "public",
+    "node_modules",
+    "bower_components",
     "wwwroot",
 }
 
@@ -444,10 +442,6 @@ _SKIP_FILE_PATTERNS: set[str] = {
 _SKIP_PATH_REGEXES: list[re.Pattern[str]] = [
     re.compile(r"migrations?/\d"),  # Django/Alembic migrations
     re.compile(r"alembic/versions/"),
-    re.compile(r"static/.*\.(js|css)$"),  # Static assets (bundled JS/CSS)
-    re.compile(r"tinymce", re.IGNORECASE),  # TinyMCE or similar editors
-    re.compile(r"ckeditor", re.IGNORECASE),
-    re.compile(r"swagger|openapi", re.IGNORECASE),  # Generated API specs
 ]
 
 
@@ -504,33 +498,32 @@ def _is_low_value_file(rel_path: str) -> bool:
 # ── Ranking ──────────────────────────────────────────────────────────
 
 # Patterns that indicate high-value "entry point" files.
-_ENTRY_POINT_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"(^|/)main\.py$"),
-    re.compile(r"(^|/)app\.py$"),
-    re.compile(r"(^|/)server\.py$"),
-    re.compile(r"(^|/)cli\.py$"),
-    re.compile(r"(^|/)routes?\.py$"),
-    re.compile(r"(^|/)views?\.py$"),
-    re.compile(r"(^|/)api\.py$"),
-    re.compile(r"(^|/)urls\.py$"),
-    re.compile(r"(^|/)handlers?\.py$"),
-    re.compile(r"(^|/)middleware\.py$"),
-    re.compile(r"(^|/)settings\.py$"),
-    re.compile(r"(^|/)config\.py$"),
-    re.compile(r"(^|/)models\.py$"),  # Django models (not Marshmallow schemas)
-    re.compile(r"(^|/)tasks?\.py$"),  # Celery tasks
-    re.compile(r"(^|/)index\.(ts|tsx|js|jsx)$"),
-    re.compile(r"(^|/)App\.(ts|tsx|js|jsx)$"),
-    re.compile(r"(^|/)server\.(ts|js)$"),
-    re.compile(r"(^|/)router\.(ts|js)$"),
-]
-
-# Patterns that indicate schema/serializer-heavy files (lower value per symbol).
-_SCHEMA_HEAVY_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"schema", re.IGNORECASE),
-    re.compile(r"serializer", re.IGNORECASE),
-    re.compile(r"dto", re.IGNORECASE),
-    re.compile(r"types?\.(py|ts|js)$"),
+# Two tiers: universal patterns get a full boost, framework-specific
+# patterns get a smaller boost so they don't dominate in other contexts.
+_ENTRY_POINT_PATTERNS: list[tuple[re.Pattern[str], float]] = [
+    # Universal entry points — these are entry points in virtually any project.
+    (re.compile(r"(^|/)main\.py$"), 8.0),
+    (re.compile(r"(^|/)app\.py$"), 8.0),
+    (re.compile(r"(^|/)server\.py$"), 8.0),
+    (re.compile(r"(^|/)cli\.py$"), 8.0),
+    (re.compile(r"(^|/)config\.py$"), 6.0),
+    (re.compile(r"(^|/)settings\.py$"), 6.0),
+    (
+        re.compile(r"(^|/)index\.(ts|tsx|js|jsx)$"),
+        3.0,
+    ),  # Common re-export pattern, not always an entry point
+    (re.compile(r"(^|/)App\.(ts|tsx|js|jsx)$"), 8.0),
+    (re.compile(r"(^|/)server\.(ts|js)$"), 8.0),
+    # Framework-specific — useful in Django/Flask/Celery/Express but not universal.
+    (re.compile(r"(^|/)routes?\.py$"), 4.0),
+    (re.compile(r"(^|/)views?\.py$"), 4.0),
+    (re.compile(r"(^|/)api\.py$"), 4.0),
+    (re.compile(r"(^|/)urls\.py$"), 4.0),
+    (re.compile(r"(^|/)handlers?\.py$"), 4.0),
+    (re.compile(r"(^|/)middleware\.py$"), 3.0),
+    (re.compile(r"(^|/)models\.py$"), 3.0),
+    (re.compile(r"(^|/)tasks?\.py$"), 3.0),
+    (re.compile(r"(^|/)router\.(ts|js)$"), 4.0),
 ]
 
 
@@ -543,7 +536,6 @@ def _compute_file_score(
     Scoring philosophy:
     - Diversity of symbol types matters more than raw count.
     - Entry points (main, app, routes, etc.) get a significant boost.
-    - Schema-heavy files are penalised (they inflate count without insight).
     - Deeper paths are slightly penalised (leaf modules less important).
     - Files with a mix of classes AND functions score higher than
       files with only one kind.
@@ -583,19 +575,11 @@ def _compute_file_score(
     # Cap so schema files with 3 methods each don't dominate.
     method_bonus = min(n_methods_total * 0.3, 3.0)
 
-    # Entry point boost.
+    # Entry point boost (tiered — universal patterns get more than framework-specific).
     entry_boost = 0.0
-    for pattern in _ENTRY_POINT_PATTERNS:
+    for pattern, boost in _ENTRY_POINT_PATTERNS:
         if pattern.search(rel_path):
-            entry_boost = 8.0
-            break
-
-    # Schema/DTO penalty: files whose name suggests they're mostly schemas
-    # get a penalty. They have lots of symbols but low insight.
-    schema_penalty = 0.0
-    for pattern in _SCHEMA_HEAVY_PATTERNS:
-        if pattern.search(rel_path):
-            schema_penalty = 4.0
+            entry_boost = boost
             break
 
     # Depth penalty: files deeper in the tree are often less important.
@@ -617,9 +601,7 @@ def _compute_file_score(
         except Exception:
             pass
 
-    score = (
-        base + diversity + method_bonus + entry_boost + graph_boost - schema_penalty - depth_penalty
-    )
+    score = base + diversity + method_bonus + entry_boost + graph_boost - depth_penalty
     return max(score, 0.1)  # Don't go negative
 
 
