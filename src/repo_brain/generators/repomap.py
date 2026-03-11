@@ -9,12 +9,13 @@ The generated map is designed to be injected into an LLM system prompt
 via ``opencode.json`` instructions, giving the model "spatial awareness"
 of the entire codebase without reading every file.
 
-Token budget target: ~2 000 tokens for the final output.
+Token budget target: ~4 000 tokens for the final output.
 """
 
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -269,7 +270,7 @@ def _extract_ts_interface(node) -> Symbol:
     for child in node.children:
         if child.type == "type_identifier":
             name = _node_text(child)
-        elif child.type == "interface_body" or child.type == "object_type":
+        elif child.type in ("interface_body", "object_type"):
             for body_child in child.children:
                 if body_child.type in ("method_signature", "property_signature"):
                     sig_name = ""
@@ -394,7 +395,57 @@ def extract_file_symbols(file_path: Path, repo_root: Path) -> FileSymbols | None
     return FileSymbols(rel_path=rel_path, language=ts_lang, symbols=symbols)
 
 
-# ── Ranking ──────────────────────────────────────────────────────────
+# ── Filtering ────────────────────────────────────────────────────────
+
+# Patterns that indicate vendored, generated, or low-value files.
+# Checked against relative path parts and full relative path.
+_VENDORED_DIR_PATTERNS: set[str] = {
+    "vendor",
+    "vendored",
+    "third_party",
+    "third-party",
+    "thirdparty",
+    "external",
+    "extern",
+    "deps",
+    "node_modules",
+    "bower_components",
+    "wwwroot",
+    "repos",  # submodules / vendored repos
+}
+
+# File suffixes that are low-value for a repo map.
+_SKIP_SUFFIXES: set[str] = {
+    ".d.ts",  # TypeScript declarations (usually from libraries)
+    ".min.js",
+    ".min.ts",
+    ".generated.ts",
+    ".generated.py",
+}
+
+# File name patterns that are low-value.
+_SKIP_FILE_PATTERNS: set[str] = {
+    "package.json",
+    "package-lock.json",
+    "tsconfig.json",
+    "jest.config.ts",
+    "jest.config.js",
+    "webpack.config.js",
+    "vite.config.ts",
+    "vite.config.js",
+    "setup.py",
+    "setup.cfg",
+    "conftest.py",
+    "__init__.py",
+    "versioneer.py",
+    "_version.py",
+}
+
+# Regex patterns for generated or vendored paths.
+_SKIP_PATH_REGEXES: list[re.Pattern[str]] = [
+    re.compile(r"migrations?/\d"),  # Django/Alembic migrations
+    re.compile(r"alembic/versions/"),
+]
 
 
 def _is_test_file(rel_path: str) -> bool:
@@ -420,81 +471,229 @@ def _is_test_file(rel_path: str) -> bool:
     return False
 
 
-def _rank_files_by_references(
-    all_files: list[FileSymbols],
+def _is_low_value_file(rel_path: str) -> bool:
+    """Check if a file is vendored, generated, or otherwise low-value."""
+    parts = rel_path.replace("\\", "/").split("/")
+    basename = parts[-1] if parts else ""
+
+    # Check directory parts against vendored patterns
+    for part in parts[:-1]:  # exclude filename
+        if part.lower() in _VENDORED_DIR_PATTERNS:
+            return True
+
+    # Check file suffixes (need to handle compound like .d.ts)
+    for suffix in _SKIP_SUFFIXES:
+        if basename.endswith(suffix):
+            return True
+
+    # Check exact file names
+    if basename in _SKIP_FILE_PATTERNS:
+        return True
+
+    # Check path regexes
+    for regex in _SKIP_PATH_REGEXES:
+        if regex.search(rel_path):
+            return True
+
+    return False
+
+
+# ── Ranking ──────────────────────────────────────────────────────────
+
+# Patterns that indicate high-value "entry point" files.
+# Two tiers: universal patterns get a full boost, framework-specific
+# patterns get a smaller boost so they don't dominate in other contexts.
+_ENTRY_POINT_PATTERNS: list[tuple[re.Pattern[str], float]] = [
+    # Universal entry points — these are entry points in virtually any project.
+    (re.compile(r"(^|/)main\.py$"), 8.0),
+    (re.compile(r"(^|/)app\.py$"), 8.0),
+    (re.compile(r"(^|/)server\.py$"), 8.0),
+    (re.compile(r"(^|/)cli\.py$"), 8.0),
+    (re.compile(r"(^|/)config\.py$"), 6.0),
+    (re.compile(r"(^|/)settings\.py$"), 6.0),
+    (
+        re.compile(r"(^|/)index\.(ts|tsx|js|jsx)$"),
+        3.0,
+    ),  # Common re-export pattern, not always an entry point
+    (re.compile(r"(^|/)App\.(ts|tsx|js|jsx)$"), 8.0),
+    (re.compile(r"(^|/)server\.(ts|js)$"), 8.0),
+    # Framework-specific — useful in Django/Flask/Celery/Express but not universal.
+    (re.compile(r"(^|/)routes?\.py$"), 4.0),
+    (re.compile(r"(^|/)views?\.py$"), 4.0),
+    (re.compile(r"(^|/)api\.py$"), 4.0),
+    (re.compile(r"(^|/)urls\.py$"), 4.0),
+    (re.compile(r"(^|/)handlers?\.py$"), 4.0),
+    (re.compile(r"(^|/)middleware\.py$"), 3.0),
+    (re.compile(r"(^|/)models\.py$"), 3.0),
+    (re.compile(r"(^|/)tasks?\.py$"), 3.0),
+    (re.compile(r"(^|/)router\.(ts|js)$"), 4.0),
+]
+
+
+def _compute_file_score(
+    fs: FileSymbols,
     graph_store: Any | None = None,
-) -> list[FileSymbols]:
-    """Rank files by importance using symbol references and graph data.
+) -> float:
+    """Compute an importance score for a file.
 
-    Files with more symbols and graph connections are ranked higher.
-    If a graph store is available, nodes with more dependents get a boost.
-    Test files are excluded entirely.
+    Scoring philosophy:
+    - Diversity of symbol types matters more than raw count.
+    - Entry points (main, app, routes, etc.) get a significant boost.
+    - Deeper paths are slightly penalised (leaf modules less important).
+    - Files with a mix of classes AND functions score higher than
+      files with only one kind.
     """
-    # Filter out test files — they inflate the map with low-value symbols
-    all_files = [fs for fs in all_files if not _is_test_file(fs.rel_path)]
+    rel_path = fs.rel_path
 
-    scores: dict[str, float] = {}
+    # Count symbol types
+    n_classes = 0
+    n_functions = 0
+    n_types = 0
+    n_methods_total = 0
+    for sym in fs.symbols:
+        if sym.kind in ("class", "interface"):
+            n_classes += 1
+            n_methods_total += len(sym.children)
+        elif sym.kind == "function":
+            n_functions += 1
+        elif sym.kind == "type":
+            n_types += 1
 
-    # Base score: number of symbols (classes worth more than functions)
-    for fs in all_files:
-        score = 0.0
-        for sym in fs.symbols:
-            if sym.kind in ("class", "struct", "interface"):
-                score += 3.0
-                score += min(len(sym.children) * 0.5, 5.0)
-            elif sym.kind == "function":
-                score += 1.0
-            elif sym.kind == "type":
-                score += 1.5
-        scores[fs.rel_path] = score
+    total_symbols = n_classes + n_functions + n_types
+    if total_symbols == 0:
+        return 0.0
 
-    # Graph boost: if we have a dependency graph, boost files in
-    # highly-connected nodes.
+    # Base score: logarithmic so 50 symbols isn't 50x better than 1.
+    # A file with 5 symbols scores ~2.6, 20 symbols ~4.3, 100 symbols ~6.6.
+    import math
+
+    base = math.log2(total_symbols + 1)
+
+    # Diversity bonus: files with a mix of classes and functions are more
+    # informative than files with 40 of the same thing.
+    kinds_present = sum([n_classes > 0, n_functions > 0, n_types > 0])
+    diversity = kinds_present * 1.5  # 0, 1.5, 3.0, or 4.5
+
+    # Method density: classes with methods are more useful than empty ones.
+    # Cap so schema files with 3 methods each don't dominate.
+    method_bonus = min(n_methods_total * 0.3, 3.0)
+
+    # Entry point boost (tiered — universal patterns get more than framework-specific).
+    entry_boost = 0.0
+    for pattern, boost in _ENTRY_POINT_PATTERNS:
+        if pattern.search(rel_path):
+            entry_boost = boost
+            break
+
+    # Depth penalty: files deeper in the tree are often less important.
+    # services/foo/app/src/foo/bar/baz.py → depth 7 → penalty 1.4
+    depth = len(rel_path.split("/"))
+    depth_penalty = max(0.0, (depth - 3) * 0.2)
+
+    # Graph boost: if we have a dependency graph, files in highly-connected
+    # nodes get a boost.
+    graph_boost = 0.0
     if graph_store is not None:
         try:
             for node_info in graph_store.get_all_nodes():
                 node_name = node_info.get("name", "")
-                downstream = graph_store.get_downstream(node_name, depth=1)
-                boost = min(len(downstream) * 0.5, 5.0)
-                # Apply boost to files that belong to this service
-                for fs in all_files:
-                    if node_name in fs.rel_path:
-                        scores[fs.rel_path] = scores.get(fs.rel_path, 0) + boost
+                if node_name and node_name in rel_path:
+                    downstream = graph_store.get_downstream(node_name, depth=1)
+                    graph_boost = min(len(downstream) * 0.5, 5.0)
+                    break
         except Exception:
             pass
 
-    # Sort by score descending
-    all_files.sort(key=lambda fs: scores.get(fs.rel_path, 0), reverse=True)
-    return all_files
+    score = base + diversity + method_bonus + entry_boost + graph_boost - depth_penalty
+    return max(score, 0.1)  # Don't go negative
+
+
+def _rank_and_filter(
+    all_files: list[FileSymbols],
+    graph_store: Any | None = None,
+) -> list[FileSymbols]:
+    """Filter out low-value files, rank the rest by importance.
+
+    Applies a directory diversity cap so no single top-level directory
+    (e.g. ``mcp_servers/``, ``services/``) dominates the output.
+
+    Returns filtered and sorted list (most important first).
+    """
+    filtered: list[FileSymbols] = []
+    for fs in all_files:
+        if _is_test_file(fs.rel_path):
+            continue
+        if _is_low_value_file(fs.rel_path):
+            continue
+        filtered.append(fs)
+
+    # Compute scores and sort
+    scored = [(fs, _compute_file_score(fs, graph_store)) for fs in filtered]
+    scored.sort(key=lambda x: x[1], reverse=True)
+
+    # Apply directory diversity cap: at most N files per grouping directory.
+    # For monorepo-style directories that are known containers (services/,
+    # mcp_servers/, libraries/, etc.), group by the *second* level so each
+    # sub-service gets its own budget.  For other top-level dirs, group by
+    # the first level.
+    monorepo_containers = {
+        "services",
+        "mcp_servers",
+        "libraries",
+        "packages",
+        "apps",
+        "modules",
+        "agents",
+    }
+    top_dir_counts: dict[str, int] = {}
+    diverse: list[FileSymbols] = []
+    for fs, _score in scored:
+        parts = fs.rel_path.replace("\\", "/").split("/")
+        if len(parts) > 2 and parts[0].lower() in monorepo_containers:
+            group_key = f"{parts[0]}/{parts[1]}"
+        elif len(parts) > 1:
+            group_key = parts[0]
+        else:
+            group_key = "__root__"
+        count = top_dir_counts.get(group_key, 0)
+        if count >= _MAX_FILES_PER_TOP_DIR:
+            continue
+        top_dir_counts[group_key] = count + 1
+        diverse.append(fs)
+
+    return diverse
 
 
 # ── Formatting ───────────────────────────────────────────────────────
 
 # Approximate token budget.  1 token ≈ 4 chars in code-like text.
-_TOKEN_BUDGET = 2000
-_CHAR_BUDGET = _TOKEN_BUDGET * 4  # ~8 000 chars
+_TOKEN_BUDGET = 6000
+_CHAR_BUDGET = _TOKEN_BUDGET * 4  # ~24 000 chars
 
-# Max top-level symbols to show per file.
-_MAX_SYMBOLS_PER_FILE = 8
+# Max files from any single top-level directory (e.g. mcp_servers/, services/).
+# Prevents one area from crowding out the rest of the repo.
+_MAX_FILES_PER_TOP_DIR = 5
 
-# Max methods to show per class/interface.  Beyond this we summarize.
-_MAX_METHODS_PER_SYMBOL = 3
+# Max top-level symbols to show per file.  Balance between enough detail
+# to navigate and leaving room for more files in the budget.
+_MAX_SYMBOLS_PER_FILE = 10
+
+# Max methods to show per class/interface.
+_MAX_METHODS_PER_SYMBOL = 5
 
 
 def _format_symbol_compact(sym: Symbol, indent: int = 1) -> str:
-    """Format a symbol compactly, collapsing children beyond the limit."""
+    """Format a symbol compactly.  Silently drops children beyond the limit."""
     prefix = "  " * indent
     line = f"{prefix}{sym.signature}"
 
     if not sym.children:
         return line
 
+    # Show up to the limit, silently drop the rest.
+    # No "... +N more" — that wastes tokens saying nothing useful.
     shown = sym.children[:_MAX_METHODS_PER_SYMBOL]
-    hidden = len(sym.children) - len(shown)
-
     child_lines = [f"{'  ' * (indent + 1)}{c.signature}" for c in shown]
-    if hidden > 0:
-        child_lines.append(f"{'  ' * (indent + 1)}... +{hidden} more")
 
     return line + "\n" + "\n".join(child_lines)
 
@@ -505,8 +704,8 @@ def format_repo_map(
 ) -> str:
     """Format extracted symbols into a compact repo map string.
 
-    Stops adding files once the character budget is reached (~2K tokens).
-    Symbols per file are capped and methods are collapsed.
+    Stops adding files once the character budget is reached (~4K tokens).
+    Symbols per file are capped and methods are silently truncated.
     """
     lines: list[str] = []
     lines.append("# Repository Map")
@@ -516,36 +715,33 @@ def format_repo_map(
     lines.append("")
 
     total_chars = sum(len(ln) + 1 for ln in lines)  # +1 for newline
+    files_shown = 0
 
     for fs in files:
         # Build this file's block first, then check budget
         file_lines: list[str] = []
         file_lines.append(f"## {fs.rel_path}")
 
+        # Show symbols up to limit, silently drop excess
         symbols_to_show = fs.symbols[:_MAX_SYMBOLS_PER_FILE]
-        hidden_symbols = len(fs.symbols) - len(symbols_to_show)
 
         for sym in symbols_to_show:
             file_lines.append(_format_symbol_compact(sym))
-
-        if hidden_symbols > 0:
-            file_lines.append(f"  ... +{hidden_symbols} more symbols")
 
         file_lines.append("")
 
         block_chars = sum(len(ln) + 1 for ln in file_lines)
 
         if total_chars + block_chars > char_budget:
-            # Budget exhausted — note how many files were skipped
-            remaining = len(files) - len([ln for ln in lines if ln.startswith("## ")])
-            if remaining > 0:
-                lines.append(f"*... {remaining} more files omitted*")
-                lines.append("")
+            # Budget exhausted — stop silently.  The LLM doesn't need to
+            # know how many files were omitted.
             break
 
         lines.extend(file_lines)
         total_chars += block_chars
+        files_shown += 1
 
+    logger.info("Repo map: %d files shown within %d char budget", files_shown, char_budget)
     return "\n".join(lines)
 
 
@@ -554,7 +750,7 @@ def format_repo_map(
 
 def generate_repo_map(
     config: RepoConfig,
-    max_files: int = 50,
+    max_files: int = 80,
     graph_store: Any | None = None,
 ) -> str:
     """Generate a repo map for the entire repository.
@@ -564,7 +760,7 @@ def generate_repo_map(
 
     Args:
         config: Repository configuration.
-        max_files: Maximum number of files to include in the map.
+        max_files: Maximum number of files to consider after ranking.
         graph_store: Optional graph store for ranking boost.
 
     Returns:
@@ -589,8 +785,8 @@ def generate_repo_map(
     if not all_file_symbols:
         return "# Repository Map\n\nNo supported source files found.\n"
 
-    # Rank and truncate
-    ranked = _rank_files_by_references(all_file_symbols, graph_store=graph_store)
+    # Filter, rank, and truncate
+    ranked = _rank_and_filter(all_file_symbols, graph_store=graph_store)
     top_files = ranked[:max_files]
 
     return format_repo_map(top_files)

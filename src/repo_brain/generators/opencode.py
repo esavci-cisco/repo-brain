@@ -6,18 +6,15 @@ Generates the files that wire repo-brain into OpenCode's extension points:
    (vector search → formatted chunks injected into prompt).
 2. ``.opencode/commands/scope.md`` — custom ``/scope`` command for task scoping
    (blast-radius analysis injected into prompt).
-3. ``.opencode/plugins/repo-brain.ts`` — plugin with two hooks:
-
-   - ``session.created``: auto-refreshes the repo map so the system prompt
-     always has an up-to-date skeleton.
-   - ``chat.message``: reads every user message, shells out to
-     ``repo-brain context`` to find relevant code, and appends the result
-     as an additional message part *before* the message is persisted.
-     This gives the LLM automatic context on every turn without requiring
-     the user to explicitly call ``/q``.
-
-4. Patches ``opencode.json`` to add ``.repo-brain/repomap.md`` to the
-   ``instructions`` field so the repo map is loaded into every system prompt.
+3. ``.opencode/commands/summarize.md`` — custom ``/summarize`` command that
+   generates an architectural summary of the codebase.  Run once; the output
+   is saved to ``.repo-brain/architecture.md`` and loaded into every future
+   session automatically.
+4. ``.opencode/plugins/repo-brain.ts`` — plugin with a ``session.created``
+   hook that auto-refreshes the repo map so the system prompt is always fresh.
+5. Patches ``opencode.json`` to add ``.repo-brain/repomap.md`` and
+   ``.repo-brain/architecture.md`` to the ``instructions`` field so both
+   files are loaded into every system prompt.
 
 All files are written into the *target repository* (not ~/.repo-brain).
 """
@@ -66,6 +63,28 @@ Use the scope analysis output to plan and implement the task.
 Read the key files listed in the analysis, then proceed.
 Do NOT do broad grep/glob for discovery — the scoping already
 identified the relevant files.
+"""
+
+_SUMMARIZE_COMMAND_TEMPLATE = """\
+---
+description: Generate an architectural summary of the codebase (run once, cached)
+---
+
+Check if `.repo-brain/architecture.md` already exists. If it does, tell the
+user it already exists and ask if they want to regenerate it.
+
+If it doesn't exist (or the user wants to regenerate), run this command to
+gather context:
+
+```
+repo-brain summarize-context
+```
+
+Then follow the instructions in the output to write the architectural summary.
+Save it to the path specified at the end of the output.
+
+After saving, confirm to the user that the summary was created and will be
+loaded automatically on every future session.
 """
 
 _PLUGIN_TEMPLATE = """\
@@ -137,6 +156,10 @@ def generate_opencode_files(config: RepoConfig) -> dict[str, Path]:
     scope_path.write_text(_SCOPE_COMMAND_TEMPLATE)
     created["/scope command (task scoping)"] = scope_path
 
+    summarize_path = commands_dir / "summarize.md"
+    summarize_path.write_text(_SUMMARIZE_COMMAND_TEMPLATE)
+    created["/summarize command (architectural summary)"] = summarize_path
+
     # 2. Plugin
     plugins_dir = repo_root / ".opencode" / "plugins"
     plugins_dir.mkdir(parents=True, exist_ok=True)
@@ -158,11 +181,17 @@ def generate_opencode_files(config: RepoConfig) -> dict[str, Path]:
 
 
 def _patch_opencode_json(opencode_json_path: Path) -> None:
-    """Patch opencode.json to include .repo-brain/repomap.md in instructions.
+    """Patch opencode.json to include repo-brain files in instructions.
 
-    Creates the file if it doesn't exist.  Preserves existing content.
+    Adds both ``.repo-brain/repomap.md`` (repo map) and
+    ``.repo-brain/architecture.md`` (architectural summary) to the
+    ``instructions`` array.  Creates the file if it doesn't exist.
+    Preserves existing content.
     """
-    repo_map_ref = ".repo-brain/repomap.md"
+    repo_brain_refs = [
+        ".repo-brain/repomap.md",
+        ".repo-brain/architecture.md",
+    ]
 
     if opencode_json_path.exists():
         try:
@@ -172,15 +201,16 @@ def _patch_opencode_json(opencode_json_path: Path) -> None:
     else:
         data = {}
 
-    # Ensure instructions field exists and contains the repo map reference
+    # Ensure instructions field exists and contains the repo-brain references
     instructions = data.get("instructions", [])
 
     # instructions can be a string or a list
     if isinstance(instructions, str):
         instructions = [instructions]
 
-    if repo_map_ref not in instructions:
-        instructions.append(repo_map_ref)
+    for ref in repo_brain_refs:
+        if ref not in instructions:
+            instructions.append(ref)
 
     data["instructions"] = instructions
     opencode_json_path.write_text(json.dumps(data, indent=2) + "\n")

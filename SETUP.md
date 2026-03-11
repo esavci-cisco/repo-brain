@@ -2,16 +2,16 @@
 
 ## What repo-brain does
 
-repo-brain is a local MCP server that gives OpenCode persistent memory about your codebase. Without it, every OpenCode session starts from zero and you have to tell it to research the codebase every time.
+repo-brain gives OpenCode persistent structural memory about your codebase using a **push architecture** — context is injected deterministically into the LLM's system prompt, not pulled on demand by tool calls.
 
-The primary value is **architecture context loading** — OpenCode calls `get_architecture` and instantly knows your service map, data stores, and infrastructure. No filesystem exploration needed.
+The primary value is the **repo map**: a Tree-sitter AST skeleton (file paths, class names, function signatures, no bodies) that's loaded into every system prompt via `opencode.json` instructions. The LLM always knows what exists and where — no filesystem exploration needed.
 
 It also provides:
-- **Semantic code search** for finding code by concept when grep won't work
-- **Service-level context** for focused info about a specific service
-- **Dependency queries** for impact analysis before changing shared code (Phase 2)
+- **Architectural summary** — a concise overview generated once by OpenCode via `/summarize`, saved to `.repo-brain/architecture.md` and loaded into every system prompt alongside the repo map. Gives the LLM persistent knowledge of what each service does, common patterns, shared libraries, and cross-service dependencies.
+- **`/q <query>`** — semantic code search, returns top 3 code chunks injected directly into the prompt
+- **`/scope <description>`** — blast-radius analysis: affected services, key files, dependencies, risks
 
-All data is stored locally in `~/.repo-brain/`. No Docker, no server process, no cloud.
+All data is stored locally in `~/.repo-brain/`. No Docker, no external services, no cloud, no API costs (embeddings run locally, summary uses the LLM you're already paying for).
 
 ---
 
@@ -24,14 +24,19 @@ uv tool install /path/to/repo-brain
 # 2. Register your repo
 repo-brain init /path/to/your/repo
 
-# 3. Run the full pipeline (index + build-graph + generate-docs)
+# 3. Install indexing dependencies (first time only — adds torch for embedding)
+uv tool install --with 'repo-brain[index]' /path/to/repo-brain
+
+# 4. Run the full pipeline (index → graph → map → opencode integration)
 repo-brain setup
 
-# 4. (Optional) Save embedding model locally for faster search
+# 5. (Optional) Save embedding model locally for faster search
 repo-brain export-model
-
-# 5. Add MCP config to your repo's opencode.json
 ```
+
+After setup, just open OpenCode in the repo. The repo map loads automatically into every system prompt. Use `/q` and `/scope` for on-demand context.
+
+Run `/summarize` once in OpenCode to generate a persistent architectural summary. This uses your LLM to write a concise overview of the codebase, saved to `.repo-brain/architecture.md` and loaded automatically on every future session.
 
 ---
 
@@ -65,35 +70,23 @@ This registers the repo, auto-detects the git remote and branch, and creates a c
 repo-brain setup
 ```
 
-This runs the full pipeline in order: **index → build-graph → generate-docs**.
+This runs the full pipeline in four steps:
 
-- **Index**: scans all files, chunks them (AST-aware for Python, sliding window for others), generates embeddings, and stores them in local ChromaDB. For a ~4,300 file repo, this takes about 60 seconds on an M-series Mac.
-- **Build graph**: parses `compose.yml`, all `pyproject.toml` files, and `.proto` files to build a unified dependency graph.
-- **Generate docs**: creates starter docs at `~/.repo-brain/repos/<slug>/docs/` enriched with graph data.
+1. **Index** — scans files, chunks code (AST-aware for Python, sliding window for others), generates embeddings, stores in local ChromaDB. For a ~4,300 file repo, takes about 60 seconds on an M-series Mac.
+2. **Build graph** — parses `compose.yml`, all `pyproject.toml` files, and `.proto` files to build a unified dependency graph.
+3. **Generate map** — Tree-sitter extracts structural info (classes, functions, signatures) → `.repo-brain/repomap.md` in the target repo.
+4. **Generate OpenCode integration** — writes `/q`, `/scope`, and `/summarize` commands, a session-start plugin, and patches `opencode.json` to load the repo map and architectural summary.
 
 Use `repo-brain setup --full` to force a full re-index (delete existing and rebuild).
 
-You can also run each step individually if needed:
+You can also run each step individually:
 
 ```bash
-repo-brain index          # Just re-index
-repo-brain build-graph    # Just rebuild the graph
-repo-brain generate-docs  # Just regenerate docs
+repo-brain index              # Just re-index
+repo-brain build-graph        # Just rebuild the graph
+repo-brain generate-map       # Just regenerate the repo map
+repo-brain generate-opencode  # Just regenerate OpenCode integration files
 ```
-
-#### Curating the docs (highest ROI thing you can do)
-
-The generated docs give OpenCode the skeleton. But the real value comes from adding the things only you know. Open `~/.repo-brain/repos/<slug>/docs/architecture.md` and add:
-
-- **What each service actually does** in business terms (not just "FastAPI service")
-- **How data flows** between services (e.g., "rest-api writes to Kafka → event-swarm-node consumes → writes evaluation results to Postgres")
-- **Which services are critical** vs experimental or deprecated
-- **Which services are tightly coupled** and which are independent
-- **Common pitfalls** when working in specific areas of the codebase
-
-Do the same for `domain_terms.md` (business vocabulary that an outsider wouldn't know) and `gotchas.md` (the things you've learned the hard way).
-
-Every line you add saves you from explaining it to OpenCode in future sessions. This is persistent memory — write it once, benefit forever.
 
 ### 4. (Optional) Save embedding model locally
 
@@ -103,35 +96,72 @@ repo-brain export-model
 
 One-time operation. Saves the embedding model to `~/.repo-brain/models/` so future searches skip HuggingFace network checks. Shaves ~2 seconds off each search.
 
-### 5. Wire into OpenCode
+---
 
-Add the `mcp` section to your target repo's `opencode.json`:
+## How it works
 
-```json
-{
-  "mcp": {
-    "repo-brain": {
-      "type": "local",
-      "command": ["repo-brain", "serve"],
-      "enabled": true,
-      "environment": {
-        "REPO_PATH": "/path/to/your/repo"
-      }
-    }
-  }
-}
+### Repo map (always loaded)
+
+The repo map is a compact AST skeleton generated by Tree-sitter. It lists every file, class, and function signature — no bodies, no implementation details. The map targets ~6K tokens to stay within budget.
+
+**How it gets into the system prompt:**
+1. `repo-brain generate-map` writes the skeleton to `.repo-brain/repomap.md` in the target repo
+2. `repo-brain generate-opencode` patches `opencode.json` to include `".repo-brain/repomap.md"` in the `instructions` array
+3. OpenCode reads `opencode.json` on startup and loads all files listed in `instructions` into the system prompt
+4. The LLM sees the repo map in every conversation
+
+**How it stays current:**
+- `repo-brain generate-opencode` also writes a plugin to `.opencode/plugins/repo-brain.ts`
+- The plugin listens for `session.created` events and runs `repo-brain generate-map` automatically
+- Every new OpenCode session gets a fresh repo map
+
+### Architectural summary (always loaded)
+
+The architectural summary is a concise overview generated once by OpenCode via `/summarize`. It captures what each service does, common patterns, shared libraries, and cross-service dependencies — knowledge that a repo map alone can't convey.
+
+**How it works:**
+1. `repo-brain summarize-context` gathers the repo map, dependency graph, and README into a structured prompt
+2. `/summarize` feeds that context to OpenCode's LLM and asks it to write a concise architectural summary
+3. The output is saved to `.repo-brain/architecture.md` in the target repo
+4. `opencode.json` already includes `architecture.md` in its `instructions` array, so it loads automatically on every future session
+
+You only run `/summarize` once (or when the architecture changes significantly). It costs one LLM call — after that, the summary loads for free on every session.
+
+### /q and /scope commands
+
+```
+/q authentication middleware    # semantic search → top 3 code chunks
+/scope add rate limiting to API # blast-radius analysis → affected services, files, risks
 ```
 
-Since `repo-brain` is installed globally via `uv tool`, OpenCode can find it directly on your PATH.
+`/q` is for targeted lookup — returns actual source code chunks. `/scope` is for understanding impact before starting work — returns affected services, key files, and risk assessment.
 
-repo-brain ships its usage instructions via the MCP protocol — OpenCode receives them automatically when the server connects. No manual AGENTS.md editing required.
+These are implemented as OpenCode custom commands (`.opencode/commands/q.md` and `.opencode/commands/scope.md`) that shell out to `repo-brain context` and `repo-brain scope` respectively.
 
-**GITHUB_TOKEN** (optional): Only needed by the `refresh_index` tool (which runs `git fetch`). You can omit it if:
-- Your repo is public
-- You use SSH remotes (`git@github.com:...`)
-- You have a git credential helper configured (`gh auth login`, macOS Keychain, etc.)
+---
 
-If you need it, add `"GITHUB_TOKEN": "{env:GITHUB_TOKEN}"` to the environment block.
+## Generated files
+
+`repo-brain setup` creates these files in the target repo:
+
+| File | Purpose | Committed? |
+|------|---------|------------|
+| `.repo-brain/repomap.md` | AST skeleton loaded into system prompt | No (gitignored) |
+| `.repo-brain/architecture.md` | LLM-generated architectural summary | No (gitignored) |
+| `.opencode/commands/q.md` | `/q` custom command definition | No (gitignored) |
+| `.opencode/commands/scope.md` | `/scope` custom command definition | No (gitignored) |
+| `.opencode/commands/summarize.md` | `/summarize` custom command definition | No (gitignored) |
+| `.opencode/plugins/repo-brain.ts` | Session-start map refresh plugin | No (gitignored) |
+| `opencode.json` (patched) | Adds `repomap.md` and `architecture.md` to `instructions` array | Yes |
+
+Data stored at `~/.repo-brain/repos/<slug>/`:
+
+```
+├── config.toml        # Repo settings (path, remote, model)
+├── chroma/            # Vector embeddings
+├── metadata.db        # SQLite file index (content hashes)
+└── graph.json         # Dependency graph
+```
 
 ---
 
@@ -153,7 +183,7 @@ repo-brain tracks a SHA-256 hash for every indexed file in SQLite. When you run 
 4. If the hash is different → **re-embed** only that file's chunks
 5. If a file was deleted → **remove** its chunks from the vector store
 
-This means running `repo-brain index` after a few file changes takes seconds, not minutes.
+Running `repo-brain index` after a few file changes takes seconds, not minutes.
 
 ### Recommended workflow
 
@@ -171,47 +201,58 @@ This means running `repo-brain index` after a few file changes takes seconds, no
 
 The index persists in `~/.repo-brain/`. It survives across OpenCode sessions, terminal restarts, and reboots. Once indexed, the data is there until you explicitly delete it or re-index.
 
-Think of it like a database: you load data once, then query it many times.
-
-### When the index gets stale
-
-The index becomes stale when:
-- Teammates push new code to the repo and you pull it
-- You make significant local changes across many files
-- You add new services or delete old ones
-
-For day-to-day work where you're editing a few files, the existing index is fine. Run `repo-brain index` when it matters — before a big architecture question or cross-service refactor.
+The repo map is automatically refreshed on session start via the plugin, but the vector index (used by `/q` and `/scope`) persists until you explicitly re-index.
 
 ---
 
 ## CLI Reference
 
 ```
-repo-brain init <path>         # Register a repo
-repo-brain setup [--full]      # Run full pipeline: index + build-graph + generate-docs
-repo-brain index [--full]      # Index (incremental by default)
-repo-brain build-graph         # Build dependency graph from compose/toml/proto
-repo-brain refresh [--no-pull] # Git fetch + re-index delta
-repo-brain generate-docs       # Generate architecture docs (one-shot)
-repo-brain export-model        # Save embedding model locally (one-time)
-repo-brain search <query>      # Search from terminal
-repo-brain status              # Show index stats
-repo-brain list                # List registered repos
-repo-brain serve               # Start MCP server (OpenCode does this automatically)
+repo-brain init <path>           # Register a repo
+repo-brain setup [--full]        # Full pipeline: index → graph → map → opencode
+repo-brain index [--full]        # Index codebase (incremental by default)
+repo-brain build-graph           # Build dependency graph from compose/toml/proto
+repo-brain generate-map          # Generate Tree-sitter repo map
+repo-brain generate-opencode     # Generate OpenCode integration files
+repo-brain context <query>       # Return formatted code context (used by /q)
+repo-brain scope <description>   # Scope a task (used by /scope)
+repo-brain summarize-context     # Output context for /summarize (repo map + graph + README)
+repo-brain refresh [--no-pull]   # Git fetch + re-index changed files
+repo-brain export-model          # Save embedding model locally (one-time)
+repo-brain search <query>        # Search from terminal (human-readable)
+repo-brain status                # Show index stats
+repo-brain list                  # List registered repos
 ```
 
 ---
 
-## MCP Tools (what OpenCode sees)
+## Verifying the setup
 
-| Tool | What it does | When to use |
-|------|-------------|-------------|
-| `get_architecture()` | Returns the full architecture.md | **Primary tool** — architecture questions |
-| `get_service_info(service_name)` | Returns focused info about one service | Working on a specific service |
-| `search_code(query, limit, service, language)` | Semantic search across the codebase | Finding code by concept, not by name |
-| `query_dependencies(module, direction, depth)` | Dependency graph traversal | Impact analysis before changing shared code |
-| `refresh_index(pull)` | Pull latest + re-index changed files | Updating the index |
-| `index_status()` | File counts, staleness, last run info | Checking index health |
+After running `repo-brain setup`, verify everything is wired correctly:
+
+1. **Check the repo map exists and has content:**
+   ```bash
+   cat .repo-brain/repomap.md | head -30
+   ```
+
+2. **Check opencode.json has the instructions entries:**
+   ```bash
+   cat opencode.json
+   # Should contain: "instructions": [".repo-brain/repomap.md", ".repo-brain/architecture.md"]
+   ```
+
+3. **Check the plugin exists:**
+   ```bash
+   cat .opencode/plugins/repo-brain.ts
+   ```
+
+4. **Check the commands exist:**
+   ```bash
+   ls .opencode/commands/
+   # Should show: q.md  scope.md  summarize.md
+   ```
+
+5. **Test in OpenCode:** Start a new session and ask the LLM what it knows about the codebase structure. It should reference classes, functions, and file paths from the repo map without needing to explore the filesystem.
 
 ---
 
@@ -225,7 +266,7 @@ repo-brain init /path/to/repo-b --name repo-b
 repo-brain list  # Shows both repos
 ```
 
-Data is stored at `~/.repo-brain/repos/<slug>/` per repo. The MCP server auto-detects which repo to use based on the `REPO_PATH` environment variable.
+Data is stored at `~/.repo-brain/repos/<slug>/` per repo. The CLI auto-detects which repo to use based on the current working directory, or you can specify it with `--repo`.
 
 ---
 
@@ -242,12 +283,7 @@ Everything lives under `~/.repo-brain/`:
         ├── config.toml              # Repo settings (path, remote, model)
         ├── chroma/                  # Vector embeddings (~500MB for large repos)
         ├── metadata.db              # SQLite file index (~1MB)
-        ├── graph.json               # Dependency graph (Phase 2)
-        └── docs/
-            ├── architecture.md      # Edit this! Add domain knowledge
-            ├── service_map.json     # Structured service data
-            ├── domain_terms.md      # Edit this! Add vocabulary
-            └── gotchas.md           # Edit this! Add known traps
+        └── graph.json               # Dependency graph
 ```
 
 To completely reset a repo's index: delete the `<repo-slug>/` directory and re-run `repo-brain init` + `repo-brain setup`.
@@ -256,12 +292,14 @@ To completely reset a repo's index: delete the `<repo-slug>/` directory and re-r
 
 ## Troubleshooting
 
-**"No repo configured" error**: Run `repo-brain init <path>` first, or set the `REPO_PATH` environment variable.
+**"No repo configured" error**: Run `repo-brain init <path>` first, or use `--repo` to specify the repo.
 
 **Search returns irrelevant vendored code**: Add skip patterns to `~/.repo-brain/repos/<slug>/config.toml` under `extra_skip_patterns`, then run `repo-brain index --full`.
 
-**MCP server not connecting in OpenCode**: Make sure `repo-brain` is on your PATH (`which repo-brain`). If not, run `uv tool install /path/to/repo-brain` again. Test with `repo-brain serve` to verify the server starts.
+**Repo map seems empty or missing files**: Make sure Tree-sitter can parse your files. Currently supports Python (`.py`), TypeScript (`.ts`, `.tsx`), and JavaScript (`.js`, `.jsx`). Files over 500KB are skipped.
 
-**OpenCode still launches Task agents for architecture questions**: Check that the MCP server is connecting successfully (`repo-brain serve` should start without errors). repo-brain ships its own instructions via the MCP protocol — OpenCode should pick them up automatically.
+**OpenCode doesn't seem to know about the codebase**: Check that `opencode.json` has `".repo-brain/repomap.md"` and `".repo-brain/architecture.md"` in its `instructions` array and that the files exist. Run `repo-brain generate-opencode` to re-patch. If `architecture.md` doesn't exist yet, run `/summarize` in OpenCode to generate it.
+
+**Plugin not refreshing the map**: Make sure `repo-brain` is on your PATH (`which repo-brain`). The plugin shells out to `repo-brain generate-map` — if the binary isn't found, the refresh silently fails.
 
 **Index seems slow**: First run downloads the embedding model (~90MB). Run `repo-brain export-model` to save it locally and skip network checks on future runs.

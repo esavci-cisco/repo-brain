@@ -177,15 +177,7 @@ def _flush_batch(
     metadatas: list[dict],
 ) -> None:
     """Generate embeddings and store a batch of chunks."""
-    try:
-        from repo_brain.ingestion.embedder import generate_embeddings
-    except ImportError:
-        click.echo(
-            "Error: sentence-transformers is required for indexing.\n"
-            "Install it with: uv pip install 'repo-brain[index]'",
-            err=True,
-        )
-        raise SystemExit(1)
+    from repo_brain.ingestion.embedder import generate_embeddings
 
     embeddings = generate_embeddings(documents, model_name=config.embedding_model)  # type: ignore[union-attr]
     store.add_chunks(ids, documents, embeddings, metadatas)  # type: ignore[union-attr]
@@ -446,8 +438,10 @@ def setup(ctx: click.Context, full: bool, repo: str | None) -> None:
     click.echo()
     click.echo("OpenCode will now:")
     click.echo("  - Load .repo-brain/repomap.md into every system prompt")
+    click.echo("  - Load .repo-brain/architecture.md if it exists (run /summarize to generate)")
     click.echo("  - Support /q <query> for semantic code search")
     click.echo("  - Support /scope <description> for task scoping")
+    click.echo("  - Support /summarize to generate an architectural summary (run once)")
     click.echo("  - Auto-refresh the repo map on session start")
 
 
@@ -521,6 +515,138 @@ def list_repos() -> None:
         click.echo(f"  Remote: {config.remote_url or '(none)'}")
         click.echo(f"  Data: {config.data_dir}")
         click.echo()
+
+
+# ── Summarize context command (for /summarize) ──────────────────────
+
+
+@cli.command("summarize-context")
+@click.option("--repo", "-r", default=None, help="Repo name or path")
+def summarize_context(repo: str | None) -> None:
+    """Gather repo map + dependency graph into a prompt for architectural summary.
+
+    Outputs a structured prompt to stdout that OpenCode uses to generate
+    ``.repo-brain/architecture.md``.  The LLM writes the summary once;
+    subsequent sessions just load the cached file.
+    """
+    click.echo("Loading repo-brain...", err=True)
+    config = _resolve_config(repo)
+    if not config:
+        raise SystemExit(1)
+
+    from pathlib import Path
+
+    from repo_brain.storage.graph_store import GraphStore
+
+    repo_root = Path(config.path)
+    lines: list[str] = []
+
+    # 1. Include the repo map if it exists
+    repomap_path = repo_root / ".repo-brain" / "repomap.md"
+    if repomap_path.exists():
+        repomap_content = repomap_path.read_text().strip()
+        lines.append("## Source: Repository Map (file structure + symbols)")
+        lines.append("")
+        lines.append(repomap_content)
+        lines.append("")
+    else:
+        lines.append("(No repo map found — run `repo-brain generate-map` first.)")
+        lines.append("")
+
+    # 2. Include the dependency graph summary
+    try:
+        graph = GraphStore(config)
+        nodes = graph.get_all_nodes()
+        if nodes:
+            lines.append("## Source: Dependency Graph")
+            lines.append("")
+            for node in nodes:
+                name = node.get("name", "")
+                ntype = node.get("node_type", "unknown")
+                desc = node.get("description", "")
+                upstream = graph.get_upstream(name, depth=1)
+                downstream = graph.get_downstream(name, depth=1)
+
+                entry = f"- **{name}** (type: {ntype})"
+                if desc:
+                    entry += f" — {desc}"
+                lines.append(entry)
+
+                if upstream:
+                    up_names = [u["name"] for u in upstream]
+                    lines.append(f"  - depends on: {', '.join(up_names)}")
+                if downstream:
+                    down_names = [d["name"] for d in downstream]
+                    lines.append(f"  - used by: {', '.join(down_names)}")
+            lines.append("")
+    except Exception:
+        lines.append("(No dependency graph found — run `repo-brain build-graph` first.)")
+        lines.append("")
+
+    # 3. Include any top-level READMEs or docs
+    for readme_name in ("README.md", "README.rst", "README.txt", "README"):
+        readme_path = repo_root / readme_name
+        if readme_path.exists():
+            content = readme_path.read_text().strip()
+            # Truncate long READMEs to keep the prompt reasonable
+            if len(content) > 3000:
+                content = content[:3000] + "\n\n... (truncated)"
+            lines.append(f"## Source: {readme_name}")
+            lines.append("")
+            lines.append(content)
+            lines.append("")
+            break  # Only include the first one found
+
+    # 4. The instruction for the LLM
+    arch_path = repo_root / ".repo-brain" / "architecture.md"
+    lines.append("---")
+    lines.append("")
+    lines.append("## Your Task")
+    lines.append("")
+    lines.append(
+        "Based on the sources above, write a concise architectural summary "
+        "of this repository. This summary will be loaded into your system "
+        "prompt on every future session, so it must be compact but comprehensive."
+    )
+    lines.append("")
+    lines.append("The summary should include:")
+    lines.append("")
+    lines.append("1. **Overview** (2-3 sentences): What this repo is and what it does.")
+    lines.append(
+        "2. **Services/Components** (bullet list): Each service or major component "
+        "with a 1-sentence description of what it does. Group by category if there "
+        'are many (e.g., "MCP Servers", "Core Services", "Libraries").'
+    )
+    lines.append(
+        "3. **Key Patterns** (bullet list): Common patterns used across the codebase "
+        "(e.g., config management, auth, error handling, API patterns). Include which "
+        "files/services implement the canonical version."
+    )
+    lines.append(
+        "4. **Shared Libraries & Reusable Code** (bullet list): Libraries, utilities, "
+        "or modules that are used by multiple services. Note what they provide."
+    )
+    lines.append(
+        "5. **Cross-Service Dependencies**: How services connect (API calls, message "
+        "queues, shared databases, gRPC, etc.)."
+    )
+    lines.append(
+        "6. **Development Notes**: Anything a developer should know — monorepo "
+        "conventions, build system, test patterns, deployment structure."
+    )
+    lines.append("")
+    lines.append("Guidelines:")
+    lines.append("- Be factual. Only describe what you can see in the sources above.")
+    lines.append("- Keep the total summary under 4000 characters (~1000 tokens).")
+    lines.append("- Use markdown formatting.")
+    lines.append(
+        "- Focus on information that helps you (the AI) make smart suggestions "
+        'like "we already have X in service Y, reuse it instead of building from scratch."'
+    )
+    lines.append("")
+    lines.append(f"Save the summary to: `{arch_path}`")
+
+    click.echo("\n".join(lines))
 
 
 @cli.command("export-model")
