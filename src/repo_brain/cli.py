@@ -177,15 +177,7 @@ def _flush_batch(
     metadatas: list[dict],
 ) -> None:
     """Generate embeddings and store a batch of chunks."""
-    try:
-        from repo_brain.ingestion.embedder import generate_embeddings
-    except ImportError:
-        click.echo(
-            "Error: sentence-transformers is required for indexing.\n"
-            "Install it with: uv pip install 'repo-brain[index]'",
-            err=True,
-        )
-        raise SystemExit(1)
+    from repo_brain.ingestion.embedder import generate_embeddings
 
     embeddings = generate_embeddings(documents, model_name=config.embedding_model)  # type: ignore[union-attr]
     store.add_chunks(ids, documents, embeddings, metadatas)  # type: ignore[union-attr]
