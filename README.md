@@ -1,5 +1,9 @@
 # repo-brain
 
+<p align="center">
+  <img src="assets/banner.png" alt="repo-brain" width="600">
+</p>
+
 Persistent repo intelligence for [OpenCode](https://opencode.ai). Gives your AI coding assistant structural memory that survives across sessions — without relying on the LLM to call the right tools.
 
 ## The Problem
