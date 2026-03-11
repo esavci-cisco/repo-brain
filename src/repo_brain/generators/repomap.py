@@ -411,6 +411,7 @@ _VENDORED_DIR_PATTERNS: set[str] = {
     "node_modules",
     "bower_components",
     "wwwroot",
+    "repos",  # submodules / vendored repos
 }
 
 # File suffixes that are low-value for a repo map.
@@ -436,6 +437,8 @@ _SKIP_FILE_PATTERNS: set[str] = {
     "setup.cfg",
     "conftest.py",
     "__init__.py",
+    "versioneer.py",
+    "_version.py",
 }
 
 # Regex patterns for generated or vendored paths.
@@ -611,6 +614,9 @@ def _rank_and_filter(
 ) -> list[FileSymbols]:
     """Filter out low-value files, rank the rest by importance.
 
+    Applies a directory diversity cap so no single top-level directory
+    (e.g. ``mcp_servers/``, ``services/``) dominates the output.
+
     Returns filtered and sorted list (most important first).
     """
     filtered: list[FileSymbols] = []
@@ -625,19 +631,52 @@ def _rank_and_filter(
     scored = [(fs, _compute_file_score(fs, graph_store)) for fs in filtered]
     scored.sort(key=lambda x: x[1], reverse=True)
 
-    return [fs for fs, _score in scored]
+    # Apply directory diversity cap: at most N files per grouping directory.
+    # For monorepo-style directories that are known containers (services/,
+    # mcp_servers/, libraries/, etc.), group by the *second* level so each
+    # sub-service gets its own budget.  For other top-level dirs, group by
+    # the first level.
+    monorepo_containers = {
+        "services",
+        "mcp_servers",
+        "libraries",
+        "packages",
+        "apps",
+        "modules",
+        "agents",
+    }
+    top_dir_counts: dict[str, int] = {}
+    diverse: list[FileSymbols] = []
+    for fs, _score in scored:
+        parts = fs.rel_path.replace("\\", "/").split("/")
+        if len(parts) > 2 and parts[0].lower() in monorepo_containers:
+            group_key = f"{parts[0]}/{parts[1]}"
+        elif len(parts) > 1:
+            group_key = parts[0]
+        else:
+            group_key = "__root__"
+        count = top_dir_counts.get(group_key, 0)
+        if count >= _MAX_FILES_PER_TOP_DIR:
+            continue
+        top_dir_counts[group_key] = count + 1
+        diverse.append(fs)
+
+    return diverse
 
 
 # ── Formatting ───────────────────────────────────────────────────────
 
 # Approximate token budget.  1 token ≈ 4 chars in code-like text.
-_TOKEN_BUDGET = 4000
-_CHAR_BUDGET = _TOKEN_BUDGET * 4  # ~16 000 chars
+_TOKEN_BUDGET = 6000
+_CHAR_BUDGET = _TOKEN_BUDGET * 4  # ~24 000 chars
 
-# Max top-level symbols to show per file.  Show more symbols per file
-# rather than truncating aggressively — the goal is to give the LLM
-# enough to navigate without reading the file.
-_MAX_SYMBOLS_PER_FILE = 15
+# Max files from any single top-level directory (e.g. mcp_servers/, services/).
+# Prevents one area from crowding out the rest of the repo.
+_MAX_FILES_PER_TOP_DIR = 5
+
+# Max top-level symbols to show per file.  Balance between enough detail
+# to navigate and leaving room for more files in the budget.
+_MAX_SYMBOLS_PER_FILE = 10
 
 # Max methods to show per class/interface.
 _MAX_METHODS_PER_SYMBOL = 5
