@@ -22,6 +22,7 @@ class VectorStore:
     def __init__(self, config: RepoConfig) -> None:
         self.config = config
         config.chroma_dir.mkdir(parents=True, exist_ok=True)
+        logger.info("Opening vector store...")
         self._client = chromadb.PersistentClient(
             path=str(config.chroma_dir),
             settings=Settings(anonymized_telemetry=False),
@@ -69,18 +70,20 @@ class VectorStore:
                 )
         logger.info("Stored %d chunks in vector store", len(ids))
 
-    def search(
+    def search_by_text(
         self,
-        query_embedding: list[float],
+        query: str,
         limit: int = 10,
         where: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
-        """Search for similar chunks.
+        """Search for similar chunks using ChromaDB's built-in embedding.
 
-        Returns list of dicts with keys: id, document, metadata, distance.
+        Uses ChromaDB's default embedding function (all-MiniLM-L6-v2 via
+        onnxruntime) — avoids importing torch/sentence-transformers entirely,
+        cutting query latency from ~10s to ~1s.
         """
         kwargs: dict[str, Any] = {
-            "query_embeddings": [query_embedding],
+            "query_texts": [query],
             "n_results": limit,
             "include": ["documents", "metadatas", "distances"],
         }
@@ -88,6 +91,10 @@ class VectorStore:
             kwargs["where"] = where
 
         results = self._collection.query(**kwargs)
+        return self._parse_results(results)
+
+    def _parse_results(self, results: dict[str, Any]) -> list[dict[str, Any]]:
+        """Parse raw ChromaDB query results into a flat list."""
 
         items: list[dict[str, Any]] = []
         if not results["ids"] or not results["ids"][0]:

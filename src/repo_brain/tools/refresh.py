@@ -79,8 +79,16 @@ def refresh_index(config: RepoConfig, pull: bool = True) -> dict[str, Any]:
 
     # Re-index changed files
     if result["changed_files"]:
+        try:
+            from repo_brain.ingestion.embedder import generate_embeddings
+        except ImportError:
+            result["errors"].append(
+                "sentence-transformers is required for re-indexing. "
+                "Install it with: uv pip install 'repo-brain[index]'"
+            )
+            return result
+
         from repo_brain.ingestion.chunker import chunk_file
-        from repo_brain.ingestion.embedder import generate_embeddings
         from repo_brain.ingestion.scanner import get_language
         from repo_brain.storage.metadata_db import MetadataDB, compute_file_hash
         from repo_brain.storage.vector_store import VectorStore

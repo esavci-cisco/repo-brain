@@ -1,100 +1,75 @@
 # repo-brain
 
-Persistent repo intelligence MCP server for [OpenCode](https://opencode.ai). Gives your AI coding assistant architectural memory that survives across sessions.
+Persistent repo intelligence for [OpenCode](https://opencode.ai). Gives your AI coding assistant structural memory that survives across sessions — without relying on the LLM to call the right tools.
 
 ## The Problem
 
-Every new OpenCode session starts from zero. On a large codebase (34+ microservices, ~4,300 files), the AI wastes time rediscovering the same things: which services exist, how they connect, where the relevant code lives. You end up saying "research the codebase" at the start of every conversation.
+Every new OpenCode session starts from zero. On a large codebase (34+ microservices, ~4,300 files), the AI wastes time rediscovering the same things: which services exist, how they connect, where the relevant code lives. MCP tools help, but they depend on the LLM remembering to call them — and it often doesn't.
 
 ## What repo-brain Does
 
-repo-brain provides two layers of persistent, pre-computed knowledge:
+repo-brain uses a **push architecture**: context is injected deterministically into the LLM's view, not pulled on demand by tool calls. No MCP server, no tool definitions, no hoping the model picks the right tool.
 
-1. **Static knowledge** (via AGENTS.md) -- a compact codebase overview injected into AGENTS.md so the LLM has architectural context from the first message. Covers tech stack, components, dependency hotspots, and gotchas.
+1. **Repo Map (always-on)** — a Tree-sitter AST skeleton (file paths, class names, function signatures, no bodies) saved to `.repo-brain/repomap.md` and loaded into every system prompt via `opencode.json` instructions. The LLM always knows what exists and where. Auto-refreshed on session start via a plugin hook.
 
-2. **Interactive tools** (via MCP + custom subagent) -- semantic search and task scoping accessible through a custom OpenCode subagent that competes with the built-in `explore` agent:
-   - **Task scoping** -- describe what you want to do, get back affected services, key files, dependencies, and risks
-   - **Semantic code search** -- find code by concept ("authentication flow") when grep won't work
-   - **Dependency graph** -- upstream/downstream impact analysis from Docker Compose, pyproject.toml, and proto files
-   - **Incremental indexing** -- re-index only changed files, keeps context fresh
+2. **`/q <query>`** — explicit semantic search, returns top 3 code chunks with full source. Context is injected directly into the prompt.
+
+3. **`/scope <description>`** — blast-radius analysis: affected services, key files, dependencies, risks. Designed for starting tasks — gives the LLM a focused context package so it skips the discovery phase.
 
 All data is stored locally at `~/.repo-brain/`. No Docker, no external services, no cloud.
 
 ## Quick Start
 
 ```bash
-# Install globally
+# Install (lightweight — no torch, no CUDA)
 uv tool install /path/to/repo-brain
 
-# Register and set up your repo (index + build-graph + generate-docs)
+# Register and set up your repo (first time pulls sentence-transformers for embedding)
 repo-brain init /path/to/your/repo
+uv tool install --with 'repo-brain[index]' /path/to/repo-brain  # adds torch for indexing
 repo-brain setup
 ```
 
-Add to your repo's `opencode.json`:
+After the initial indexing, queries (`/q`, `/scope`, auto-context) use ChromaDB's
+built-in ONNX runtime — `sentence-transformers`/`torch` are **not** loaded at
+query time, keeping latency under 2 seconds.
 
-```json
-{
-  "mcp": {
-    "repo-brain": {
-      "type": "local",
-      "command": ["repo-brain", "serve"],
-      "enabled": true,
-      "environment": {
-        "REPO_PATH": "/path/to/your/repo"
-      }
-    }
-  }
-}
-```
+`repo-brain setup` runs four steps:
+1. **Index** — scans files, chunks code (AST-aware), embeds into a local vector store (ChromaDB)
+2. **Build graph** — parses `compose.yml`, `pyproject.toml`, and proto files into a dependency graph
+3. **Generate map** — Tree-sitter extracts structural info → `.repo-brain/repomap.md`
+4. **Generate OpenCode integration** — writes commands, plugin, and patches `opencode.json`
 
-`repo-brain setup` does three things:
-1. Indexes the codebase into a local vector store (ChromaDB)
-2. Builds a dependency graph from compose.yml, pyproject.toml, and proto files
-3. Generates docs: injects a codebase overview into AGENTS.md, and creates a custom OpenCode subagent at `.opencode/agents/repo-brain.md`
+After setup, just open OpenCode in the repo. The repo map loads automatically into every system prompt. Use `/q` and `/scope` for on-demand context.
 
-## How It Works with OpenCode
+## How It Works
 
-### The subagent (key mechanism)
+### Repo map (always loaded)
 
-OpenCode's system prompt directs the LLM to use subagents (via the Task tool) for codebase exploration. repo-brain generates a custom `repo-brain` subagent that appears alongside the built-in `explore` and `general` agents. Its description is tuned to match exploration queries ("how does X work?", "find code related to Y"), so the LLM picks it over `explore`.
+The repo map is a compact AST skeleton generated by Tree-sitter. It lists every file, class, and function signature — no bodies, no implementation details. It's loaded into the system prompt via `opencode.json` instructions, so the LLM always knows what exists and where.
 
-The subagent has access to repo-brain's MCP tools (`search_code`, `scope_task`) plus `read`, so it can:
-1. Query the semantic index to find relevant files
-2. Read those files to provide detailed answers
-3. Scope tasks with dependency awareness
+The plugin refreshes the map on `session.created`, so it stays current across sessions.
 
-### AGENTS.md injection
-
-`repo-brain setup` also injects a compact codebase overview between `<!-- repo-brain:start -->` and `<!-- repo-brain:end -->` markers at the end of AGENTS.md. Existing content above the markers is never modified. This gives the LLM architectural context (tech stack, components, dependency hotspots) from the first message without any tool calls.
-
-## MCP Tools
-
-The MCP server exposes 3 tools, accessed through the repo-brain subagent:
-
-| Tool | Purpose | When to Use |
-|------|---------|-------------|
-| `search_code(query)` | Semantic code search by meaning | Finding code by concept |
-| `scope_task(description)` | Scope a task -- returns affected files, deps, risks | Starting any new work |
-| `refresh_index(pull)` | Git fetch + re-index changed files | Updating the index |
-
-### scope_task in Action
-
-Paste a ticket description, feature request, or just a one-liner:
+### /q and /scope commands
 
 ```
-> add device-to-rule relationship tracking in neo4j with execution lineage
+/q authentication middleware    # semantic search → top 3 code chunks
+/scope add rate limiting to API # blast-radius analysis → affected services, files, risks
 ```
 
-Returns:
+`/q` is for targeted lookup. `/scope` is for understanding impact before starting work.
+
+### scope in action
 
 ```
+> /scope add device-to-rule relationship tracking in neo4j
+
 ## Task Scope Analysis
 
 ### Affected Services
-- rule-grpc-api (9 matches) -- gRPC Rule Management API
-- rule-mcp (6 matches) -- Rule MCP Server with ChromaDB integration
-- neo4j-init (2 matches) -- Neo4j initialization service
+- rule-grpc-api (9 matches) — gRPC Rule Management API
+- rule-mcp (6 matches) — Rule MCP Server
+- neo4j-init (2 matches) — Neo4j initialization service
 
 ### Key Files to Read
 1. mcp_servers/rule-mcp/app/src/rule_mcp_server/neo4j_client.py
@@ -108,17 +83,19 @@ Returns:
 ## CLI Commands
 
 ```
-repo-brain init <path>         # Register a repo
-repo-brain setup [--full]      # Run full pipeline: index + build-graph + generate-docs
-repo-brain index [--full]      # Index codebase (incremental by default)
-repo-brain build-graph         # Build dependency graph from compose/toml/proto
-repo-brain generate-docs       # Generate docs + AGENTS.md injection + subagent
-repo-brain refresh [--no-pull] # Git fetch + re-index changed files
-repo-brain export-model        # Save embedding model locally (one-time)
-repo-brain search <query>      # Search from terminal
-repo-brain status              # Show index stats
-repo-brain list                # List registered repos
-repo-brain serve               # Start MCP server (OpenCode does this automatically)
+repo-brain init <path>           # Register a repo
+repo-brain setup [--full]        # Full pipeline: index → graph → map → opencode
+repo-brain index [--full]        # Index codebase (incremental by default)
+repo-brain build-graph           # Build dependency graph
+repo-brain generate-map          # Generate Tree-sitter repo map
+repo-brain generate-opencode     # Generate OpenCode integration files
+repo-brain context <query>       # Return formatted code context (used by /q)
+repo-brain scope <description>   # Scope a task (used by /scope)
+repo-brain refresh [--no-pull]   # Git fetch + re-index changed files
+repo-brain export-model          # Save embedding model locally (one-time)
+repo-brain search <query>        # Search from terminal (human-readable)
+repo-brain status                # Show index stats
+repo-brain list                  # List registered repos
 ```
 
 ## Architecture
@@ -126,62 +103,60 @@ repo-brain serve               # Start MCP server (OpenCode does this automatica
 ```
 repo-brain/
 ├── src/repo_brain/
-│   ├── cli.py                  # Click CLI
-│   ├── mcp_server.py           # MCP server (3 tools: search, scope, refresh)
+│   ├── cli.py                  # Click CLI (context, scope, generate-map, etc.)
 │   ├── config.py               # Global + per-repo config
 │   ├── ingestion/
 │   │   ├── scanner.py          # .gitignore-aware file discovery
-│   │   ├── chunker.py          # AST-aware code chunking (Python)
+│   │   ├── chunker.py          # AST-aware code chunking
 │   │   ├── embedder.py         # sentence-transformers wrapper
-│   │   ├── build_graph.py      # Orchestrates parsers into NetworkX graph
+│   │   ├── build_graph.py      # Orchestrates parsers into dependency graph
 │   │   └── parsers/            # Docker Compose, pyproject.toml, proto
 │   ├── storage/
 │   │   ├── vector_store.py     # ChromaDB (local persistent)
 │   │   ├── metadata_db.py      # SQLite (file index, content hashes)
 │   │   └── graph_store.py      # NetworkX + JSON serialization
-│   ├── tools/                  # MCP tool implementations
-│   │   ├── scope.py            # scope_task -- primary daily workflow tool
+│   ├── tools/
+│   │   ├── scope.py            # Task scoping with blast-radius analysis
 │   │   ├── search.py           # Semantic code search
 │   │   └── refresh.py          # Git fetch + delta re-index
 │   └── generators/
-│       └── architecture.py     # AGENTS.md injection + subagent generator
+│       ├── repomap.py          # Tree-sitter repo map generator
+│       └── opencode.py         # OpenCode integration file generator
 ```
 
-## Generated Files in Target Repos
+## Generated Files
 
-`repo-brain generate-docs` creates these files in the target repo:
+`repo-brain setup` creates these files in the target repo:
 
 | File | Purpose | Committed? |
 |------|---------|------------|
-| `AGENTS.md` (injected section) | Codebase overview for LLM context | Yes |
-| `.opencode/agents/repo-brain.md` | Custom subagent definition | Yes |
-| `.repo-brain/codebase-overview.md` | Reference copy of the overview | No (gitignored) |
+| `.repo-brain/repomap.md` | AST skeleton for system prompt | No (gitignored) |
+| `.opencode/commands/q.md` | `/q` custom command | No (gitignored) |
+| `.opencode/commands/scope.md` | `/scope` custom command | No (gitignored) |
+| `.opencode/plugins/repo-brain.ts` | Session-start map refresh plugin | No (gitignored) |
+| `opencode.json` (patched) | Adds repomap.md to instructions | Yes |
 
-It also generates internal docs at `~/.repo-brain/repos/<slug>/docs/`:
+Data stored at `~/.repo-brain/repos/<slug>/`:
 
 ```
-~/.repo-brain/repos/<slug>/
 ├── config.toml        # Repo settings
-├── chroma/            # Vector embeddings (~500MB for large repos)
+├── chroma/            # Vector embeddings
 ├── metadata.db        # SQLite file index
-├── graph.json         # Dependency graph (NetworkX JSON)
-└── docs/
-    ├── architecture.md    # Full architecture doc
-    ├── service_map.json   # Structured service data
-    ├── domain_terms.md    # Domain vocabulary
-    └── gotchas.md         # Known pitfalls
+└── graph.json         # Dependency graph
 ```
 
 ## Key Design Decisions
 
-- **Zero infrastructure** -- no Docker, no external services. Everything runs locally
-- **Custom subagent** -- works with OpenCode's architecture instead of fighting the system prompt
-- **AGENTS.md injection** -- static knowledge delivered without tool calls, idempotent updates
-- **MCP server** -- OpenCode spawns it as a subprocess via stdio, not HTTP
-- **Multi-repo** -- each repo gets isolated storage, auto-detected by working directory
-- **Incremental indexing** -- SHA-256 content hashing, only re-embeds changed files
-- **Local embedding model** -- `all-MiniLM-L6-v2` runs on-device, no API costs
-- **3 tools only** -- minimal token overhead from tool definitions (~85% cached by providers after first turn)
+- **Push, not pull** — context is injected deterministically, not dependent on LLM tool selection
+- **Repo map in system prompt** — LLM always has structural awareness of the codebase
+- **Session-start refresh** — plugin refreshes repo map on `session.created` so it stays current
+- **Zero infrastructure** — no Docker, no external services, everything runs locally
+- **Multi-repo** — each repo gets isolated storage, auto-detected by working directory
+- **Incremental indexing** — SHA-256 content hashing, only re-embeds changed files
+- **Local embedding model** — `all-MiniLM-L6-v2` runs on-device, no API costs
+- **Lightweight queries** — queries use ChromaDB's built-in ONNX runtime, no torch import needed
+- **Tree-sitter parsing** — Python, TypeScript/TSX, JavaScript/JSX support for repo map
+- **Token-conscious** — repo map targets ~2K tokens
 
 ## Requirements
 

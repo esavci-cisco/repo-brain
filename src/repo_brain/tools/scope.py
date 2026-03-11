@@ -14,13 +14,11 @@ from __future__ import annotations
 
 import logging
 from collections import Counter
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from repo_brain.config import RepoConfig
-
-if TYPE_CHECKING:
-    from repo_brain.storage.graph_store import GraphStore
-    from repo_brain.storage.vector_store import VectorStore
+from repo_brain.storage.graph_store import GraphStore
+from repo_brain.storage.vector_store import VectorStore
 
 logger = logging.getLogger(__name__)
 
@@ -69,10 +67,13 @@ def scope_task(
         return result
 
     # Step 2: Extract affected services from search results
+    logger.info("Analyzing scope...")
     service_hits = _extract_services(search_results)
 
     # Step 3: For each affected service, pull graph data
-    graph_data = _get_graph_context(service_hits, config, depth=dep_depth, graph_store=graph_store)
+    graph_data, graph_store = _get_graph_context(
+        service_hits, config, depth=dep_depth, graph_store=graph_store
+    )
 
     # Step 4: Build the key files list (deduplicated, ranked)
     key_files = _build_key_files(search_results)
@@ -93,11 +94,20 @@ def scope_task(
 
 
 def format_scope_result(result: dict[str, Any]) -> str:
-    """Format scope result as compact markdown for the MCP tool output."""
+    """Format scope result as human-readable markdown-ish text.
+
+    This is what the ``/scope`` custom command returns to OpenCode.
+    """
     lines: list[str] = []
 
     lines.append("## Task Scope Analysis")
     lines.append("")
+
+    # Task description so the LLM knows what was scoped
+    desc = result.get("description_summary", "")
+    if desc:
+        lines.append(f"**Task**: {desc}")
+        lines.append("")
 
     # Affected services
     services = result.get("affected_services", [])
@@ -140,6 +150,14 @@ def format_scope_result(result: dict[str, Any]) -> str:
     if result.get("note"):
         lines.append(f"**Note**: {result['note']}")
         lines.append("")
+
+    # Post-call guidance — suggests follow-up actions so the LLM
+    # continues using pre-indexed data rather than falling back to grep/glob.
+    lines.append("---")
+    lines.append("**Next steps**:")
+    lines.append("- `/q <query>` — find implementations of specific concepts mentioned above")
+    lines.append("- Read only the files listed under 'Key Files to Read'")
+    lines.append("- Do NOT do broad grep/glob searches — the scoping already did discovery")
 
     return "\n".join(lines)
 
@@ -215,15 +233,19 @@ def _get_graph_context(
     config: RepoConfig,
     depth: int = 2,
     graph_store: GraphStore | None = None,
-) -> dict[str, dict[str, Any]]:
-    """Pull dependency graph context for each affected service."""
+) -> tuple[dict[str, dict[str, Any]], GraphStore | None]:
+    """Pull dependency graph context for each affected service.
+
+    Returns:
+        Tuple of (graph_data dict, GraphStore instance that was used).
+        The caller should pass the returned GraphStore to downstream functions
+        to avoid re-initializing it.
+    """
     try:
         if graph_store is None:
-            from repo_brain.storage.graph_store import GraphStore
-
             graph_store = GraphStore(config)
     except Exception:
-        return {}
+        return {}, None
 
     graph_data: dict[str, dict[str, Any]] = {}
 
@@ -247,7 +269,7 @@ def _get_graph_context(
         svc["downstream_deps"] = [d["name"] for d in downstream]
         svc["role"] = node_info.get("description", "")
 
-    return graph_data
+    return graph_data, graph_store
 
 
 def _build_key_files(
@@ -327,8 +349,6 @@ def _assess_dependencies(
     # Check if shared libraries are in the affected set
     try:
         if graph_store is None:
-            from repo_brain.storage.graph_store import GraphStore
-
             graph_store = GraphStore(config)
         for svc in service_hits:
             name = svc["service"]
