@@ -104,15 +104,18 @@ class OpenCodeTokenTracker:
         """
         logger.info(f"Running task: '{task_description}' (repo-brain={use_repo_brain})")
 
-        # Get session ID before running task (to find the new session)
-        sessions_before = self._get_session_ids()
-
         # Run task
         start_time = time.time()
+        session_id = None
         try:
             result = self._run_opencode_task(task_description, use_repo_brain, timeout)
             duration = time.time() - start_time
             success = result.returncode == 0
+
+            # Extract session ID from JSON output
+            if success and result.stdout:
+                session_id = self._extract_session_id_from_output(result.stdout)
+
             error = None if success else result.stderr
         except subprocess.TimeoutExpired:
             duration = timeout
@@ -144,12 +147,9 @@ class OpenCodeTokenTracker:
                 error=error,
             )
 
-        # Find new session ID
-        sessions_after = self._get_session_ids()
-        new_sessions = set(sessions_after) - set(sessions_before)
-
-        if not new_sessions:
-            logger.warning("No new session found after task execution")
+        # Check if we got a session ID
+        if not session_id:
+            logger.warning("No session ID found in output")
             return TaskResult(
                 task_description=task_description,
                 session_id="unknown",
@@ -158,10 +158,9 @@ class OpenCodeTokenTracker:
                 duration_seconds=duration,
                 num_messages=0,
                 num_tool_calls=0,
-                error="No session created",
+                error="No session ID in output",
             )
 
-        session_id = sorted(new_sessions)[-1]  # Get most recent session
         logger.info(f"Found session: {session_id}")
 
         # Export session data
@@ -225,12 +224,16 @@ class OpenCodeTokenTracker:
         cmd = [
             str(self.opencode_bin),
             "run",
-            "--project",
+            "--dir",
             str(self.repo_path),
+            "--format",
+            "json",
+            "--title",
+            f"Token tracking: {task_description[:50]}",
             task_description,
         ]
 
-        logger.debug(f"Running: {' '.join(cmd)}")
+        logger.info(f"Running task: '{task_description[:60]}...'")
 
         result = subprocess.run(
             cmd,
@@ -241,6 +244,31 @@ class OpenCodeTokenTracker:
         )
 
         return result
+
+    def _extract_session_id_from_output(self, output: str) -> str | None:
+        """
+        Extract session ID from OpenCode JSON output.
+
+        Args:
+            output: JSON output from `opencode run --format json`
+
+        Returns:
+            Session ID (e.g., "ses_abc123") or None if not found
+        """
+        # Parse first JSON line to get session ID
+        for line in output.split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                data = json.loads(line)
+                if "sessionID" in data:
+                    return data["sessionID"]
+            except json.JSONDecodeError:
+                continue
+
+        logger.warning("No session ID found in output")
+        return None
 
     def _get_session_ids(self) -> list[str]:
         """
