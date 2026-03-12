@@ -88,7 +88,7 @@ class EvaluationRunner:
         )
 
         # Route to appropriate test executor
-        start_time = time.time()
+        # Note: latency is now measured inside each test method for accuracy
         if test_type == "search":
             result = self._run_search_test(test_case, scenario, result)
         elif test_type == "scope":
@@ -99,12 +99,6 @@ class EvaluationRunner:
             result = self._run_code_review_test(test_case, scenario, result)
         else:
             logger.warning(f"Unknown test type: {test_type}")
-
-        # Add performance metrics
-        elapsed_time = time.time() - start_time
-        if not result.performance:
-            result.performance = PerformanceMetrics()
-        result.performance.p50_latency_ms = elapsed_time * 1000
 
         return result
 
@@ -119,6 +113,8 @@ class EvaluationRunner:
         ground_truth = test_case["ground_truth"]
         relevant_chunks = set(ground_truth.get("relevant_chunks", []))
 
+        # Measure search time only (not parsing/metric calculation)
+        search_start = time.time()
         if scenario == ScenarioType.REPO_BRAIN:
             # Use repo-brain search
             retrieved, scores = self._repo_brain_search(query)
@@ -128,8 +124,9 @@ class EvaluationRunner:
         else:  # SME_AGENTS
             # SME agents don't do semantic search - use repo-brain as baseline
             retrieved, scores = self._repo_brain_search(query)
+        search_latency_ms = (time.time() - search_start) * 1000
 
-        # Calculate metrics
+        # Calculate metrics (not included in latency)
         relevance_scores = ground_truth.get("relevance_scores", {})
         result.retrieval = calculate_retrieval_metrics(
             retrieved=retrieved,
@@ -138,6 +135,11 @@ class EvaluationRunner:
             similarity_scores=scores,
         )
         result.raw_output = json.dumps({"retrieved": retrieved, "scores": scores}, indent=2)
+
+        # Store search latency separately
+        if not result.performance:
+            result.performance = PerformanceMetrics()
+        result.performance.p50_latency_ms = search_latency_ms
 
         return result
 

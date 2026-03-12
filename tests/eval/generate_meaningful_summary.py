@@ -36,17 +36,26 @@ def calculate_metrics(results_list):
     }
 
     for result in results_list:
+        # Check both old format (retrieval_metrics) and new format (metrics.retrieval)
+        rm = None
         if result.get("retrieval_metrics"):
             rm = result["retrieval_metrics"]
-            metrics["precision_at_1"].append(rm.get("precision_at_1", 0))
-            metrics["precision_at_3"].append(rm.get("precision_at_3", 0))
-            metrics["recall_at_1"].append(rm.get("recall_at_1", 0))
-            metrics["recall_at_3"].append(rm.get("recall_at_3", 0))
-            metrics["mrr"].append(rm.get("mrr", 0))
-            metrics["ndcg_at_3"].append(rm.get("ndcg_at_3", 0))
+        elif result.get("metrics", {}).get("retrieval"):
+            rm = result["metrics"]["retrieval"]
 
-        if result.get("performance"):
-            metrics["latency_ms"].append(result["performance"].get("p50_latency_ms", 0))
+        if rm:
+            metrics["precision_at_1"].append(rm.get("precision@1", rm.get("precision_at_1", 0)))
+            metrics["precision_at_3"].append(rm.get("precision@3", rm.get("precision_at_3", 0)))
+            metrics["recall_at_1"].append(rm.get("recall@1", rm.get("recall_at_1", 0)))
+            metrics["recall_at_3"].append(rm.get("recall@3", rm.get("recall_at_3", 0)))
+            metrics["mrr"].append(rm.get("mrr", 0))
+            metrics["ndcg_at_3"].append(rm.get("ndcg@3", rm.get("ndcg_at_3", 0)))
+
+        # Check both old format (performance) and new format (metrics.performance)
+        perf = result.get("performance") or result.get("metrics", {}).get("performance", {})
+        if perf:
+            latency = perf.get("latency", {}).get("p50_ms") or perf.get("p50_latency_ms", 0)
+            metrics["latency_ms"].append(latency)
 
     # Calculate averages
     avg_metrics = {}

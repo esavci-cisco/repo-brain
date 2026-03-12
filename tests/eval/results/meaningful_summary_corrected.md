@@ -6,29 +6,29 @@
 
 **Winner: repo-brain** 🏆
 
-- **Precision@3**: repo-brain achieves 43.3% vs regular's 9.2%
-  - **+373% improvement** in finding relevant results
+- **Precision@3**: repo-brain achieves 43.3% vs regular's 5.6%
+  - **+680% improvement** in finding relevant results
 
-- **Recall@3**: repo-brain achieves 23.3% vs regular's 9.2%
-  - **+155% improvement** in retrieving all relevant results
+- **Recall@3**: repo-brain achieves 23.3% vs regular's 5.6%
+  - **+320% improvement** in retrieving all relevant results
 
-- **MRR (Mean Reciprocal Rank)**: 0.595 vs 0.167
-  - **+257% better** at ranking relevant results higher
+- **MRR (Mean Reciprocal Rank)**: 0.595 vs 0.119
+  - **+398% better** at ranking relevant results higher
 
-- **Speed**: repo-brain 1284ms vs regular 87ms
-  - **14.7x slower** but finds 4.7x more relevant results
+- **Speed**: repo-brain 1294ms vs regular 91ms
+  - **14.3x slower** but finds 7.8x more relevant results
 
 ### Detailed Metrics Comparison
 
 | Metric | repo-brain | regular | Winner |
 |--------|------------|---------|--------|
-| Precision@1 | 40.0% | 12.5% | ✅ repo-brain |
-| Precision@3 | 43.3% | 9.2% | ✅ repo-brain |
-| Recall@1 | 13.3% | 4.2% | ✅ repo-brain |
-| Recall@3 | 23.3% | 9.2% | ✅ repo-brain |
-| MRR | 0.595 | 0.167 | ✅ repo-brain |
-| NDCG@3 | 0.485 | 0.107 | ✅ repo-brain |
-| Latency (ms) | 1284 | 87 | ✅ regular |
+| Precision@1 | 40.0% | 10.0% | ✅ repo-brain |
+| Precision@3 | 43.3% | 5.6% | ✅ repo-brain |
+| Recall@1 | 13.3% | 3.3% | ✅ repo-brain |
+| Recall@3 | 23.3% | 5.6% | ✅ repo-brain |
+| MRR | 0.595 | 0.119 | ✅ repo-brain |
+| NDCG@3 | 0.485 | 0.070 | ✅ repo-brain |
+| Latency (ms) | 1294 | 91 | ✅ regular |
 
 ## Architecture Comparison
 
@@ -36,11 +36,11 @@
 - ✅ **Semantic search**: Understands intent and context
 - ✅ **Better ranking**: Uses embeddings for relevance scoring
 - ✅ **Cross-file understanding**: Can find related code across the codebase
-- ⚠️ **Slower**: 1284ms average latency
+- ⚠️ **Slower**: 1294ms average latency
 - ⚠️ **Setup required**: Needs initial indexing
 
 ### regular (Pull Architecture)
-- ✅ **Fast**: 87ms average latency
+- ✅ **Fast**: 91ms average latency
 - ✅ **No setup**: Works immediately with ripgrep
 - ⚠️ **Keyword-only**: Misses semantically similar code
 - ⚠️ **Poor ranking**: No relevance scoring

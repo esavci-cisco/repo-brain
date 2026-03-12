@@ -1,0 +1,56 @@
+{
+  "test_id": "search_002",
+  "scenario": "repo-brain",
+  "timestamp": "2026-03-12T03:52:53.337097",
+  "test_type": "search",
+  "description": "Find database migration code",
+  "metrics": {
+    "retrieval": {
+      "precision@1": 0.0,
+      "precision@3": 0.0,
+      "precision@5": 0.0,
+      "recall@1": 0.0,
+      "recall@3": 0.0,
+      "recall@5": 0.0,
+      "mrr": 0.0,
+      "ndcg@3": 0.0,
+      "ndcg@5": 0.0,
+      "avg_score": 0.66079
+    },
+    "task_completion": null,
+    "scope_analysis": null,
+    "code_understanding": null,
+    "sme_agents": null,
+    "performance": {
+      "latency": {
+        "p50_ms": 1303.4679889678955,
+        "p95_ms": 0.0,
+        "p99_ms": 0.0
+      },
+      "tokens": {
+        "prompt": 0,
+        "completion": 0,
+        "total": 0,
+        "context": 0
+      },
+      "memory_mb": 0.0
+    }
+  },
+  "raw_output": "{\n  \"retrieved\": [\n    \"services/postgres-init/migrations/alembic/versions/e22f6082358b_migration_1760451108.py\",\n    \"services/postgres-init/migrations/alembic/versions/08833a281056_migration_1760619253.py\",\n    \"services/postgres-init/migrations/tests/test_migrations_basic.py\",\n    \"services/postgres-init/migrations/tests/test_migrations_basic.py\",\n    \"services/postgres-init/migrations/alembic/versions/01b5710dde63_migration_1760385123.py\",\n    \"services/postgres-init/migrations/tests/test_pr_migration_execution.py\",\n    \"services/postgres-init/migrations/tests/test_pr_migration_execution.py\",\n    \"services/postgres-init/migrations/alembic/versions/15bf795b8eba_merge_develop_and_workspace_migrations.py\",\n    \"services/postgres-init/migrations/alembic/versions/4e10119448c2_migration_1759970801.py\",\n    \"services/postgres-init/migrations/alembic/versions/j5k6l7m8n9o0_make_identifier_optional.py\"\n  ],\n  \"scores\": [\n    0.7124,\n    0.6874,\n    0.6712,\n    0.6592,\n    0.6571,\n    0.6518,\n    0.6485,\n    0.646,\n    0.6387,\n    0.6356\n  ]\n}",
+  "ground_truth": {
+    "relevant_chunks": [
+      "services/postgres-init/migrations/alembic/env.py",
+      "services/postgres-init/migrations/alembic/versions/4c0332be5c38_add_agent_prompts_system.py",
+      "services/timescaledb-service/migrations/alembic/versions/2025_01_22_comprehensive_hierarchical_schema.py"
+    ],
+    "relevance_scores": {
+      "services/postgres-init/migrations/alembic/env.py": 1.0,
+      "services/postgres-init/migrations/alembic/versions/4c0332be5c38_add_agent_prompts_system.py": 0.9,
+      "services/timescaledb-service/migrations/alembic/versions/2025_01_22_comprehensive_hierarchical_schema.py": 0.7
+    }
+  },
+  "metadata": {
+    "difficulty": "medium",
+    "domain": "database"
+  }
+}

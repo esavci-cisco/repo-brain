@@ -35,6 +35,9 @@ from repo_brain.config import RepoConfig
 logger = logging.getLogger(__name__)
 
 
+# NOTE: This CodeChunk definition is identical to the one in chunker.py.
+# We keep it duplicated here to avoid circular imports (chunker.py imports this module).
+# If you modify this class, make sure to update both files in sync.
 @dataclass
 class CodeChunk:
     """A single chunk of code with metadata."""
