@@ -92,6 +92,13 @@ echo ""
 echo -e "${GREEN}Starting tests...${NC}"
 echo ""
 
+# Get script directory and repo root
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+# Change to repo root to run tests
+cd "$REPO_ROOT"
+
 # Run tests
 python tests/eval/e2e_task_completion.py \
     --repo "$REPO_PATH" \
