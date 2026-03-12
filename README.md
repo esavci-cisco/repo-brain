@@ -24,6 +24,30 @@ repo-brain uses a **push architecture**: context is injected deterministically i
 
 All data is stored locally at `~/.repo-brain/`. No Docker, no external services, no cloud, no API costs (embeddings run locally, summary uses the LLM you're already paying for).
 
+## Performance & Benefits
+
+**Real-world impact** from comprehensive evaluation ([see full report](tests/eval/results/meaningful_summary_latest.md)):
+
+### Task Completion Speed: 2.5x Faster ⚡
+- **With repo-brain**: ~2 minutes average task completion
+- **Without repo-brain**: ~5+ minutes for the same tasks
+- **Why**: Finds correct code on first try → fewer iterations → faster completion
+
+### Search Quality: 4.7x More Accurate 🎯
+| Metric | repo-brain | regular (ripgrep) |
+|--------|-----------|-------------------|
+| Precision@3 | 43.3% | 9.2% |
+| Recall@3 | 23.3% | 9.2% |
+| MRR | 0.595 | 0.167 |
+
+### Token Usage: 51% Reduction 💰
+- **Per task**: ~9,500 tokens vs ~19,400 tokens (regular)
+- **Cost savings**: $0.40/task = ~$14,600/year for 100 tasks/day
+- **Why**: Better search → correct files → fewer retries → less context waste
+
+### The Paradox
+Individual queries are 14.7x slower (1.28s vs 87ms), but **task completion is 2.5x faster** because accuracy matters more than query speed.
+
 ## Quick Start
 
 ```bash
@@ -179,6 +203,48 @@ Data stored at `~/.repo-brain/repos/<slug>/`:
 - **Lightweight queries** — queries use ChromaDB's built-in ONNX runtime, no torch import needed
 - **Tree-sitter parsing** — Python, TypeScript/TSX, JavaScript/JSX support for repo map
 - **Token-conscious** — repo map targets ~6K tokens, architectural summary is written once and loaded for free
+
+## Testing & Evaluation
+
+repo-brain includes comprehensive evaluation frameworks:
+
+### Search Quality Evaluation
+
+```bash
+# Compare repo-brain vs regular (ripgrep) search
+python tests/eval/run_comparison.py \
+  --test-suite search \
+  --scenarios repo-brain,regular \
+  --repo /path/to/target/repo
+
+# View results
+cat tests/eval/results/meaningful_summary_latest.md
+```
+
+See [tests/eval/results/meaningful_summary_latest.md](tests/eval/results/meaningful_summary_latest.md) for comprehensive metrics.
+
+### End-to-End Token Usage Comparison
+
+```bash
+# Run real OpenCode tasks and track token usage
+./tests/eval/run_e2e_tests.sh
+
+# Or with Python directly
+python tests/eval/e2e_task_completion.py \
+  --repo /path/to/target/repo \
+  --runs 3
+
+# View results
+cat tests/eval/results_e2e/token_usage_summary.md
+```
+
+**What it measures:**
+- Real token consumption via OpenCode session exports
+- Task completion time
+- Number of LLM calls and tool uses
+- Cost per task (with real pricing)
+
+See [tests/eval/README_E2E.md](tests/eval/README_E2E.md) for full documentation.
 
 ## Requirements
 

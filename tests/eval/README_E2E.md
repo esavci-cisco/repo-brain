@@ -1,5 +1,24 @@
 # End-to-End Task Completion Testing
 
+## Quick Start
+
+```bash
+# 1. Navigate to repo-brain
+cd /Users/esavci/Desktop/dev/repo-brain
+
+# 2. Run the test (takes ~5-10 minutes)
+python tests/eval/e2e_task_completion.py \
+  --repo /Users/esavci/Desktop/dev/Fully-Autonomous-Agents
+
+# 3. View results
+cat tests/eval/results_e2e/token_usage_summary.md
+```
+
+That's it! The test will:
+- Run 3 tasks with repo-brain enabled
+- Run same 3 tasks with regular OpenCode  
+- Compare token usage and generate a report
+
 ## Overview
 
 This directory contains tests for measuring **total token consumption** during complete coding tasks, comparing repo-brain vs regular (ripgrep) scenarios using **REAL OpenCode CLI token tracking**.
@@ -80,20 +99,30 @@ Comparison runner that:
 
 ## Usage
 
-### Basic Usage
+### Quick Start (Same Repo)
+
+**Recommended**: Use the same repository for both tests. The comparison tracks tokens for tasks with/without repo-brain context:
 
 ```bash
-# Run comparison (3 tasks, 1 run each)
+cd /Users/esavci/Desktop/dev/repo-brain
+
+# Run comparison on Fully-Autonomous-Agents (3 tasks, 1 run each)
+# This will take ~5-10 minutes total
 python tests/eval/e2e_task_completion.py \
-  --repo /path/to/repo \
+  --repo /Users/esavci/Desktop/dev/Fully-Autonomous-Agents \
   --output tests/eval/results_e2e
 
-# Multiple runs for averaging
+# Multiple runs for more reliable averages (takes longer)
 python tests/eval/e2e_task_completion.py \
-  --repo /path/to/repo \
+  --repo /Users/esavci/Desktop/dev/Fully-Autonomous-Agents \
   --runs 3
+```
 
-# Separate repos for repo-brain vs regular
+### Advanced: Separate Repos
+
+If you want to test with completely separate repo directories:
+
+```bash
 python tests/eval/e2e_task_completion.py \
   --repo /path/to/regular-repo \
   --repo-brain-repo /path/to/repo-with-brain \
@@ -152,6 +181,35 @@ Annual savings (100 tasks/day): **$14,600/year**
 3. **Fewer retry iterations**: Gets good context → LLM succeeds faster
 4. **Cleaner context**: Only relevant code sent to LLM
 
+## Expected Runtime
+
+**Quick Test (1 run, 3 tasks)**: ~5-10 minutes total
+- Each task runs OpenCode which takes 30-120 seconds
+- 3 tasks × 2 scenarios (repo-brain + regular) = 6 total executions
+
+**Reliable Test (3 runs, 3 tasks)**: ~15-30 minutes total
+- 3 tasks × 2 scenarios × 3 runs = 18 total executions
+- Provides averaged results with less variance
+
+**Full Suite (1 run, 8 tasks)**: ~30-60 minutes
+- Tests all task types and difficulty levels
+
+### What Happens During Testing
+
+For each task, the tracker:
+
+1. **Runs OpenCode** with `--format json`
+2. **Extracts session ID** from JSON output
+3. **Waits for completion** (task runs until OpenCode finishes)
+4. **Exports session** with `opencode export <sessionID>`
+5. **Parses token metrics** from session JSON
+6. **Saves results** to individual JSON files
+
+After all tasks complete:
+- **Generates summary** comparing repo-brain vs regular
+- **Calculates averages** for tokens, cost, time
+- **Computes improvements** (% reduction)
+
 ## Implementation Details
 
 ### Token Extraction
@@ -171,15 +229,22 @@ for message in session_data["messages"]:
 
 ### Session ID Detection
 
-After running a task, the tracker finds the new session:
+The tracker extracts session ID directly from OpenCode's JSON output:
 
 ```python
-sessions_before = self._get_session_ids()
-# Run task via CLI
-result = subprocess.run([opencode, "run", "--project", repo, task])
-sessions_after = self._get_session_ids()
-new_session = (set(sessions_after) - set(sessions_before)).pop()
+# Run with --format json
+result = subprocess.run([
+    opencode, "run", "--format", "json", "--dir", repo, task
+])
+
+# Parse session ID from first JSON line
+for line in result.stdout.split("\n"):
+    data = json.loads(line)
+    if "sessionID" in data:
+        return data["sessionID"]
 ```
+
+OpenCode's JSON output includes `sessionID` in every event line, making session tracking reliable.
 
 ### Handling repo-brain vs Regular
 
@@ -222,20 +287,51 @@ The comparison uses two approaches:
 
 Test cases are defined in `datasets/task.json`:
 
-```json
-{
-  "name": "end-to-end-task-completion",
-  "description": "Real coding tasks for token usage comparison",
-  "test_cases": [
-    {
-      "id": "task_001",
-      "task": "Add user authentication endpoints with JWT",
-      "ground_truth": {
-        "required_files": ["src/auth.py", "src/middleware.py"]
-      }
-    }
-  ]
-}
+### Default Test Suite (First 3 Tasks)
+
+**Task 1** (Easy, ~15 min):
+```
+Create a GET /api/v1/users/{user_id}/profile endpoint that returns user profile information
+```
+
+**Task 2** (Medium, ~20 min):
+```
+Update password hashing to use bcrypt with cost factor 12 instead of current implementation
+```
+
+**Task 3** (Hard, ~60 min):
+```
+Add connection pooling to the swarm node WebSocket handler to support 1000+ concurrent connections
+```
+
+### All Available Tasks
+
+The dataset includes **8 total tasks** across different domains:
+- **API** (easy): User profile endpoint
+- **Security** (medium): Password hashing update
+- **Networking** (hard): WebSocket connection pooling
+- **Database** (easy): Alembic migration
+- **Frontend** (medium): React TypeScript component
+- **Events** (medium): Kafka consumer with DLQ
+- **MCP** (medium): FastMCP device backup tool
+- **Agents** (hard): LangGraph workflow
+
+### Customizing Test Selection
+
+Edit `tests/eval/e2e_task_completion.py` line 37:
+
+```python
+# Run first 3 tasks (default)
+test_cases = data["test_cases"][:3]
+
+# Run all 8 tasks
+test_cases = data["test_cases"]
+
+# Run only first task (quick test)
+test_cases = data["test_cases"][:1]
+
+# Run specific tasks
+test_cases = [data["test_cases"][0], data["test_cases"][3]]  # Task 1 and 4
 ```
 
 ## Cost Analysis
