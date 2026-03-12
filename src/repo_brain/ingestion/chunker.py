@@ -1,7 +1,8 @@
 """AST-aware code chunker.
 
-Chunks Python code at function/class boundaries.
-Falls back to sliding window for non-Python files.
+Uses tree-sitter for language-agnostic chunking when available.
+Falls back to Python AST for Python files.
+Falls back to sliding window for unsupported languages.
 """
 
 from __future__ import annotations
@@ -14,6 +15,16 @@ from pathlib import Path
 
 from repo_brain.config import RepoConfig
 from repo_brain.ingestion.scanner import get_language
+
+# Try to import tree-sitter chunker
+try:
+    from repo_brain.ingestion.tree_sitter_chunker import (
+        TreeSitterChunker,
+        TREE_SITTER_AVAILABLE,
+    )
+except ImportError:
+    TREE_SITTER_AVAILABLE = False
+    TreeSitterChunker = None
 
 logger = logging.getLogger(__name__)
 
@@ -289,9 +300,20 @@ def chunk_file(file_path: Path, repo_config: RepoConfig) -> list[CodeChunk]:
     language = get_language(file_path)
     service = _infer_service(rel_path)
 
+    # Try tree-sitter first for language-agnostic chunking
+    if TREE_SITTER_AVAILABLE and TreeSitterChunker:
+        chunker = TreeSitterChunker(repo_config)
+        chunks = chunker.chunk_file(file_path, source, str(rel_path))
+        # If tree-sitter succeeded and returned function-level chunks, use them
+        if chunks and not (len(chunks) == 1 and chunks[0].symbol_name == "__file__"):
+            logger.debug(f"Using tree-sitter chunks for {rel_path}: {len(chunks)} chunks")
+            return chunks
+
+    # Fall back to Python AST if available
     if language == "python":
         return _chunk_python(source, rel_path, service)
 
+    # Final fallback to sliding window
     return _chunk_sliding_window(
         source,
         rel_path,

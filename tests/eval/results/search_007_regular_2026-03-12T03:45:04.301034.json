@@ -1,0 +1,56 @@
+{
+  "test_id": "search_007",
+  "scenario": "regular",
+  "timestamp": "2026-03-12T03:45:04.301034",
+  "test_type": "search",
+  "description": "Find REST API rate limiting",
+  "metrics": {
+    "retrieval": {
+      "precision@1": 1.0,
+      "precision@3": 0.3333333333333333,
+      "precision@5": 0.2,
+      "recall@1": 0.3333333333333333,
+      "recall@3": 0.3333333333333333,
+      "recall@5": 0.3333333333333333,
+      "mrr": 1.0,
+      "ndcg@3": 0.5540952673819175,
+      "ndcg@5": 0.5540952673819175,
+      "avg_score": 1.0
+    },
+    "task_completion": null,
+    "scope_analysis": null,
+    "code_understanding": null,
+    "sme_agents": null,
+    "performance": {
+      "latency": {
+        "p50_ms": 76.10201835632324,
+        "p95_ms": 0.0,
+        "p99_ms": 0.0
+      },
+      "tokens": {
+        "prompt": 0,
+        "completion": 0,
+        "total": 0,
+        "context": 0
+      },
+      "memory_mb": 0.0
+    }
+  },
+  "raw_output": "{\n  \"retrieved\": [\n    \"services/rest-api/app/src/rest_api/middleware/rate_limiting.py\"\n  ],\n  \"scores\": [\n    1.0\n  ]\n}",
+  "ground_truth": {
+    "relevant_chunks": [
+      "services/rest-api/app/src/rest_api/middleware/rate_limiting.py",
+      "services/rest-api/app/src/rest_api/middleware/security.py",
+      "services/rest-api/app/src/rest_api/middleware/error_handling.py"
+    ],
+    "relevance_scores": {
+      "services/rest-api/app/src/rest_api/middleware/rate_limiting.py": 1.0,
+      "services/rest-api/app/src/rest_api/middleware/security.py": 0.8,
+      "services/rest-api/app/src/rest_api/middleware/error_handling.py": 0.6
+    }
+  },
+  "metadata": {
+    "difficulty": "medium",
+    "domain": "api"
+  }
+}

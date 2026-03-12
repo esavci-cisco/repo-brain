@@ -1,0 +1,61 @@
+test_id,scenario,test_type,description,precision@1,precision@3,recall@1,recall@3,mrr,latency_ms,tokens
+search_003,repo-brain,search,Find event handling code,0.0,0.3333333333333333,0.0,0.3333333333333333,0.5,1168.9341068267822,0
+search_002,regular,search,Find database migration code,0.0,0.0,0.0,0.0,0.0,132.99083709716797,0
+search_007,regular,search,Find REST API rate limiting,1.0,0.3333333333333333,0.3333333333333333,0.3333333333333333,1.0,76.10201835632324,0
+search_010,regular,search,Find error handling middleware,0.0,0.0,0.0,0.0,0.0,53.746938705444336,0
+search_007,repo-brain,search,Find REST API rate limiting,1.0,1.0,0.3333333333333333,0.3333333333333333,1.0,1471.8129634857178,0
+search_008,repo-brain,search,Find data sanitization code,0.0,0.0,0.0,0.0,0.2,1306.78391456604,0
+search_007,regular,search,Find REST API rate limiting,0.0,0.0,0.0,0.0,0.0,70.19591331481934,0
+search_006,regular,search,Find LangGraph agent workflow,1.0,0.3333333333333333,0.3333333333333333,0.3333333333333333,1.0,69.67902183532715,0
+search_003,regular,search,Find event handling code,0.0,0.0,0.0,0.0,0.0,180.50193786621094,0
+search_002,regular,search,Find database migration code,0.0,0.0,0.0,0.0,0.0,109.56430435180664,0
+search_001,regular,search,Find JWT authentication implementation,0.0,0.3333333333333333,0.0,0.3333333333333333,0.3333333333333333,155.6680202484131,0
+search_002,regular,search,Find database migration code,0.0,0.0,0.0,0.0,0.0,58.69126319885254,0
+search_001,regular,search,Find JWT authentication implementation,0.0,0.0,0.0,0.0,0.0,153.58901023864746,0
+search_008,regular,search,Find data sanitization code,0.0,0.0,0.0,0.0,0.0,87.28909492492676,0
+search_003,repo-brain,search,Find event handling code,0.0,0.3333333333333333,0.0,0.3333333333333333,0.5,1121.734857559204,0
+search_006,repo-brain,search,Find LangGraph agent workflow,0.0,0.3333333333333333,0.0,0.3333333333333333,0.5,1191.0221576690674,0
+search_010,regular,search,Find error handling middleware,0.0,0.0,0.0,0.0,0.0,77.8348445892334,0
+search_005,repo-brain,search,Find password hashing implementation,1.0,0.6666666666666666,0.3333333333333333,0.3333333333333333,1.0,1148.569107055664,0
+search_010,repo-brain,search,Find error handling middleware,1.0,1.0,0.3333333333333333,0.3333333333333333,1.0,1871.1111545562744,0
+search_009,regular,search,Find Neo4j graph queries,0.0,0.0,0.0,0.0,0.0,96.82393074035645,0
+search_003,regular,search,Find event handling code,0.0,0.0,0.0,0.0,0.0,59.21483039855957,0
+search_005,regular,search,Find password hashing implementation,0.0,0.0,0.0,0.0,0.0,66.3609504699707,0
+search_009,regular,search,Find Neo4j graph queries,0.0,0.0,0.0,0.0,0.0,78.66096496582031,0
+search_005,repo-brain,search,Find password hashing implementation,1.0,0.6666666666666666,0.3333333333333333,0.3333333333333333,1.0,1157.02486038208,0
+search_010,regular,search,Find error handling middleware,0.0,0.0,0.0,0.0,0.0,61.45286560058594,0
+search_002,repo-brain,search,Find database migration code,0.0,0.0,0.0,0.0,0.0,1234.813928604126,0
+search_001,repo-brain,search,Find JWT authentication implementation,1.0,0.6666666666666666,0.3333333333333333,0.3333333333333333,1.0,1576.0650634765625,0
+search_004,repo-brain,search,Find WebSocket streaming implementation,0.0,0.0,0.0,0.0,0.25,1137.291669845581,0
+search_004,repo-brain,search,Find WebSocket streaming implementation,0.0,0.0,0.0,0.0,0.25,1173.6669540405273,0
+search_002,repo-brain,search,Find database migration code,0.0,0.0,0.0,0.0,0.0,1197.7760791778564,0
+search_010,repo-brain,search,Find error handling middleware,1.0,1.0,0.3333333333333333,0.3333333333333333,1.0,1217.8318500518799,0
+search_008,regular,search,Find data sanitization code,0.0,0.0,0.0,0.0,0.0,79.90384101867676,0
+search_006,repo-brain,search,Find LangGraph agent workflow,0.0,0.3333333333333333,0.0,0.3333333333333333,0.5,1129.6710968017578,0
+search_003,repo-brain,search,Find event handling code,0.0,0.3333333333333333,0.0,0.3333333333333333,0.5,1262.1259689331055,0
+search_007,repo-brain,search,Find REST API rate limiting,1.0,1.0,0.3333333333333333,0.3333333333333333,1.0,1761.5749835968018,0
+search_006,regular,search,Find LangGraph agent workflow,0.0,0.0,0.0,0.0,0.0,65.82808494567871,0
+search_010,repo-brain,search,Find error handling middleware,1.0,1.0,0.3333333333333333,0.3333333333333333,1.0,1266.8180465698242,0
+search_009,repo-brain,search,Find Neo4j graph queries,0.0,0.3333333333333333,0.0,0.3333333333333333,0.5,1261.502981185913,0
+search_003,regular,search,Find event handling code,0.0,0.0,0.0,0.0,0.25,87.08667755126953,0
+search_008,repo-brain,search,Find data sanitization code,0.0,0.0,0.0,0.0,0.2,1238.5308742523193,0
+search_004,repo-brain,search,Find WebSocket streaming implementation,0.0,0.0,0.0,0.0,0.25,1154.5777320861816,0
+search_008,regular,search,Find data sanitization code,0.0,0.0,0.0,0.0,0.0,60.0430965423584,0
+search_009,repo-brain,search,Find Neo4j graph queries,0.0,0.3333333333333333,0.0,0.3333333333333333,0.5,1294.5621013641357,0
+search_001,repo-brain,search,Find JWT authentication implementation,1.0,0.6666666666666666,0.3333333333333333,0.3333333333333333,1.0,1458.7810039520264,0
+search_004,regular,search,Find WebSocket streaming implementation,0.0,0.0,0.0,0.0,0.0,116.72115325927734,0
+search_004,regular,search,Find WebSocket streaming implementation,0.0,0.0,0.0,0.0,0.0,87.70203590393066,0
+search_006,repo-brain,search,Find LangGraph agent workflow,0.0,0.3333333333333333,0.0,0.3333333333333333,0.5,1177.9770851135254,0
+search_008,repo-brain,search,Find data sanitization code,0.0,0.0,0.0,0.0,0.2,1532.6027870178223,0
+search_002,repo-brain,search,Find database migration code,0.0,0.0,0.0,0.0,0.0,1155.1520824432373,0
+search_006,regular,search,Find LangGraph agent workflow,0.0,0.0,0.0,0.0,0.0,105.33308982849121,0
+search_007,repo-brain,search,Find REST API rate limiting,1.0,1.0,0.3333333333333333,0.3333333333333333,1.0,1182.9791069030762,0
+search_005,regular,search,Find password hashing implementation,0.0,0.0,0.0,0.0,0.0,72.88384437561035,0
+search_009,regular,search,Find Neo4j graph queries,0.0,0.0,0.0,0.0,0.0,82.20124244689941,0
+search_004,regular,search,Find WebSocket streaming implementation,0.0,0.0,0.0,0.0,0.0,67.70706176757812,0
+search_005,repo-brain,search,Find password hashing implementation,1.0,0.6666666666666666,0.3333333333333333,0.3333333333333333,1.0,1196.857213973999,0
+search_007,regular,search,Find REST API rate limiting,0.0,0.0,0.0,0.0,0.0,71.2740421295166,0
+search_001,regular,search,Find JWT authentication implementation,0.0,0.0,0.0,0.0,0.0,167.341947555542,0
+search_001,repo-brain,search,Find JWT authentication implementation,1.0,0.6666666666666666,0.3333333333333333,0.3333333333333333,1.0,1585.1929187774658,0
+search_005,regular,search,Find password hashing implementation,1.0,0.6666666666666666,0.3333333333333333,0.6666666666666666,1.0,63.33112716674805,0
+search_009,repo-brain,search,Find Neo4j graph queries,0.0,0.3333333333333333,0.0,0.3333333333333333,0.5,1182.481288909912,0

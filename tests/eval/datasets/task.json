@@ -1,0 +1,232 @@
+{
+  "description": "Task completion test cases for end-to-end evaluation",
+  "test_cases": [
+    {
+      "id": "task_001",
+      "type": "task",
+      "description": "Add a new REST API endpoint for user profile",
+      "task": "Create a GET /api/v1/users/{user_id}/profile endpoint that returns user profile information",
+      "ground_truth": {
+        "required_files": [
+          "services/rest-api/app/routers/users.py",
+          "services/postgres/app/src/postgres/queries/user_queries.py"
+        ],
+        "expected_changes": [
+          "New route handler function",
+          "Database query implementation",
+          "Response model definition"
+        ],
+        "correctness_criteria": [
+          "Endpoint returns 200 for valid user_id",
+          "Endpoint returns 404 for non-existent user",
+          "Response includes all profile fields"
+        ]
+      },
+      "metadata": {
+        "difficulty": "easy",
+        "domain": "api",
+        "estimated_time_minutes": 15
+      }
+    },
+    {
+      "id": "task_002",
+      "type": "task",
+      "description": "Fix security vulnerability in password validation",
+      "task": "Update password hashing to use bcrypt with cost factor 12 instead of current implementation",
+      "ground_truth": {
+        "required_files": [
+          "services/auth-service/internal/security/password.go"
+        ],
+        "expected_changes": [
+          "Update bcrypt cost constant",
+          "Ensure backward compatibility with existing hashes"
+        ],
+        "correctness_criteria": [
+          "New passwords use cost factor 12",
+          "Existing passwords still validate correctly",
+          "Unit tests pass"
+        ]
+      },
+      "metadata": {
+        "difficulty": "medium",
+        "domain": "security",
+        "estimated_time_minutes": 20
+      }
+    },
+    {
+      "id": "task_003",
+      "type": "task",
+      "description": "Implement WebSocket connection pooling",
+      "task": "Add connection pooling to the swarm node WebSocket handler to support 1000+ concurrent connections",
+      "ground_truth": {
+        "required_files": [
+          "services/swarm-node/app/websocket_handler.py",
+          "services/swarm-node/app/connection_pool.py",
+          "services/swarm-node/app/config.py"
+        ],
+        "expected_changes": [
+          "ConnectionPool class implementation",
+          "Pool size configuration",
+          "Connection lifecycle management",
+          "Metrics collection"
+        ],
+        "correctness_criteria": [
+          "Handles 1000+ concurrent connections",
+          "Properly closes idle connections",
+          "Reuses connections appropriately",
+          "No memory leaks"
+        ]
+      },
+      "metadata": {
+        "difficulty": "hard",
+        "domain": "networking",
+        "estimated_time_minutes": 60
+      }
+    },
+    {
+      "id": "task_004",
+      "type": "task",
+      "description": "Add database migration for new column",
+      "task": "Create an Alembic migration to add a 'priority' column to the tasks table (nullable integer, default NULL)",
+      "ground_truth": {
+        "required_files": [
+          "services/postgres-init/migrations/alembic/versions/XXX_add_task_priority.py",
+          "services/postgres/app/src/postgres/models/task.py"
+        ],
+        "expected_changes": [
+          "Upgrade function adds column",
+          "Downgrade function removes column",
+          "Model definition updated"
+        ],
+        "correctness_criteria": [
+          "Migration runs without errors",
+          "Downgrade works correctly",
+          "Existing data preserved",
+          "NULL values handled correctly"
+        ]
+      },
+      "metadata": {
+        "difficulty": "easy",
+        "domain": "database",
+        "estimated_time_minutes": 15
+      }
+    },
+    {
+      "id": "task_005",
+      "type": "task",
+      "description": "Implement React component with TypeScript",
+      "task": "Create a TaskCard component that displays task information with proper TypeScript types",
+      "ground_truth": {
+        "required_files": [
+          "services/ui/src/components/TaskCard.tsx",
+          "services/ui/src/types/task.ts"
+        ],
+        "expected_changes": [
+          "TaskCard component implementation",
+          "TypeScript interface for Task",
+          "Proper prop types",
+          "CSS styling"
+        ],
+        "correctness_criteria": [
+          "Component renders without errors",
+          "All props properly typed",
+          "No 'any' types used",
+          "Responsive design"
+        ]
+      },
+      "metadata": {
+        "difficulty": "medium",
+        "domain": "frontend",
+        "estimated_time_minutes": 30
+      }
+    },
+    {
+      "id": "task_006",
+      "type": "task",
+      "description": "Add Kafka consumer for new event type",
+      "task": "Implement a Kafka consumer for 'device.configuration.changed' events with DLQ support",
+      "ground_truth": {
+        "required_files": [
+          "services/event-swarm-node/consumers/device_config_consumer.py",
+          "libraries/python/faa-events/faa_events/schemas/device_events.py",
+          "services/event-swarm-node/config.py"
+        ],
+        "expected_changes": [
+          "Consumer class implementation",
+          "Event schema definition",
+          "DLQ handler integration",
+          "Error handling"
+        ],
+        "correctness_criteria": [
+          "Successfully consumes events",
+          "Failed messages go to DLQ",
+          "Proper offset management",
+          "Graceful shutdown"
+        ]
+      },
+      "metadata": {
+        "difficulty": "medium",
+        "domain": "events",
+        "estimated_time_minutes": 40
+      }
+    },
+    {
+      "id": "task_007",
+      "type": "task",
+      "description": "Create MCP tool for device backup",
+      "task": "Implement a FastMCP tool that backs up device configurations to S3",
+      "ground_truth": {
+        "required_files": [
+          "mcp_servers/radkit/tools/backup_device.py",
+          "mcp_servers/radkit/server.py"
+        ],
+        "expected_changes": [
+          "Tool function with proper naming",
+          "Parameter schema definition",
+          "S3 upload implementation",
+          "Error handling"
+        ],
+        "correctness_criteria": [
+          "Tool name follows kebab-case convention",
+          "All parameters documented",
+          "Successfully uploads to S3",
+          "Returns backup location"
+        ]
+      },
+      "metadata": {
+        "difficulty": "medium",
+        "domain": "mcp",
+        "estimated_time_minutes": 35
+      }
+    },
+    {
+      "id": "task_008",
+      "type": "task",
+      "description": "Implement LangGraph agent workflow",
+      "task": "Create a LangGraph workflow for multi-step task planning with checkpointing",
+      "ground_truth": {
+        "required_files": [
+          "agents/planner-agent/workflow.py",
+          "libraries/python/deep-agent/deep_agent/nodes.py"
+        ],
+        "expected_changes": [
+          "StateGraph definition",
+          "Node functions",
+          "Edge conditions",
+          "Checkpoint configuration"
+        ],
+        "correctness_criteria": [
+          "Graph compiles without errors",
+          "Checkpoint saves/restores state",
+          "Handles all edge cases",
+          "Proper error propagation"
+        ]
+      },
+      "metadata": {
+        "difficulty": "hard",
+        "domain": "agents",
+        "estimated_time_minutes": 90
+      }
+    }
+  ]
+}

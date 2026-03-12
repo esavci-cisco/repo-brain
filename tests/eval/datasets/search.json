@@ -1,0 +1,225 @@
+{
+  "description": "Search evaluation test cases - queries work for both semantic and literal search",
+  "test_cases": [
+    {
+      "id": "search_001",
+      "type": "search",
+      "description": "Find JWT authentication implementation",
+      "query": "GenerateJWT ValidateJWT token",
+      "ground_truth": {
+        "relevant_chunks": [
+          "services/auth-service/utils/jwt.go",
+          "services/auth-service/utils/jwt_test.go",
+          "services/auth-service/handlers/login.go"
+        ],
+        "relevance_scores": {
+          "services/auth-service/utils/jwt.go": 1.0,
+          "services/auth-service/utils/jwt_test.go": 0.9,
+          "services/auth-service/handlers/login.go": 0.8
+        }
+      },
+      "metadata": {
+        "difficulty": "easy",
+        "domain": "authentication"
+      }
+    },
+    {
+      "id": "search_002",
+      "type": "search",
+      "description": "Find database migration code",
+      "query": "alembic env.py upgrade downgrade",
+      "ground_truth": {
+        "relevant_chunks": [
+          "services/postgres-init/migrations/alembic/env.py",
+          "services/postgres-init/migrations/alembic/versions/4c0332be5c38_add_agent_prompts_system.py",
+          "services/timescaledb-service/migrations/alembic/versions/2025_01_22_comprehensive_hierarchical_schema.py"
+        ],
+        "relevance_scores": {
+          "services/postgres-init/migrations/alembic/env.py": 1.0,
+          "services/postgres-init/migrations/alembic/versions/4c0332be5c38_add_agent_prompts_system.py": 0.9,
+          "services/timescaledb-service/migrations/alembic/versions/2025_01_22_comprehensive_hierarchical_schema.py": 0.7
+        }
+      },
+      "metadata": {
+        "difficulty": "medium",
+        "domain": "database"
+      }
+    },
+    {
+      "id": "search_003",
+      "type": "search",
+      "description": "Find event handling code",
+      "query": "consumer.py kafka process_event",
+      "ground_truth": {
+        "relevant_chunks": [
+          "services/event-swarm-node/app/src/consumer.py",
+          "services/event-swarm-node/app/tests/test_consumer.py",
+          "services/event-swarm-node/app/tests/test_consumer_coverage.py"
+        ],
+        "relevance_scores": {
+          "services/event-swarm-node/app/src/consumer.py": 1.0,
+          "services/event-swarm-node/app/tests/test_consumer.py": 0.8,
+          "services/event-swarm-node/app/tests/test_consumer_coverage.py": 0.7
+        }
+      },
+      "metadata": {
+        "difficulty": "medium",
+        "domain": "events"
+      }
+    },
+    {
+      "id": "search_004",
+      "type": "search",
+      "description": "Find WebSocket streaming implementation",
+      "query": "websocket async def on_message",
+      "ground_truth": {
+        "relevant_chunks": [
+          "services/swarm-node/app/src/swarm_node/main.py",
+          "services/rest-api/app/src/rest_api/services/websocket_broadcaster.py",
+          "services/rest-api/app/src/rest_api/main.py"
+        ],
+        "relevance_scores": {
+          "services/swarm-node/app/src/swarm_node/main.py": 1.0,
+          "services/rest-api/app/src/rest_api/services/websocket_broadcaster.py": 0.9,
+          "services/rest-api/app/src/rest_api/main.py": 0.7
+        }
+      },
+      "metadata": {
+        "difficulty": "medium",
+        "domain": "networking"
+      }
+    },
+    {
+      "id": "search_005",
+      "type": "search",
+      "description": "Find password hashing implementation",
+      "query": "HashPassword VerifyPassword salt",
+      "ground_truth": {
+        "relevant_chunks": [
+          "services/auth-service/utils/password.go",
+          "services/auth-service/utils/password_test.go",
+          "services/auth-service/handlers/register.go"
+        ],
+        "relevance_scores": {
+          "services/auth-service/utils/password.go": 1.0,
+          "services/auth-service/utils/password_test.go": 0.9,
+          "services/auth-service/handlers/register.go": 0.7
+        }
+      },
+      "metadata": {
+        "difficulty": "easy",
+        "domain": "authentication"
+      }
+    },
+    {
+      "id": "search_006",
+      "type": "search",
+      "description": "Find LangGraph agent workflow",
+      "query": "StateGraph langgraph add_node add_edge",
+      "ground_truth": {
+        "relevant_chunks": [
+          "services/swarm-node/app/src/agents/swarm/graph/swarm_graph.py",
+          "libraries/python/deep-agent/src/deep_agent/orchestration/state_graph_builder.py",
+          "libraries/python/swarm-coordination/src/swarm_coordination/intent_router.py"
+        ],
+        "relevance_scores": {
+          "services/swarm-node/app/src/agents/swarm/graph/swarm_graph.py": 1.0,
+          "libraries/python/deep-agent/src/deep_agent/orchestration/state_graph_builder.py": 0.9,
+          "libraries/python/swarm-coordination/src/swarm_coordination/intent_router.py": 0.7
+        }
+      },
+      "metadata": {
+        "difficulty": "hard",
+        "domain": "agents"
+      }
+    },
+    {
+      "id": "search_007",
+      "type": "search",
+      "description": "Find REST API rate limiting",
+      "query": "RateLimitMiddleware rate_limiter FastAPI",
+      "ground_truth": {
+        "relevant_chunks": [
+          "services/rest-api/app/src/rest_api/middleware/rate_limiting.py",
+          "services/rest-api/app/src/rest_api/middleware/security.py",
+          "services/rest-api/app/src/rest_api/middleware/error_handling.py"
+        ],
+        "relevance_scores": {
+          "services/rest-api/app/src/rest_api/middleware/rate_limiting.py": 1.0,
+          "services/rest-api/app/src/rest_api/middleware/security.py": 0.8,
+          "services/rest-api/app/src/rest_api/middleware/error_handling.py": 0.6
+        }
+      },
+      "metadata": {
+        "difficulty": "medium",
+        "domain": "api"
+      }
+    },
+    {
+      "id": "search_008",
+      "type": "search",
+      "description": "Find data sanitization code",
+      "query": "sanitize_response redact sensitive_data",
+      "ground_truth": {
+        "relevant_chunks": [
+          "libraries/python/swarm-coordination/src/swarm_coordination/sanitize.py",
+          "services/swarm-node/app/src/swarm_node/main.py",
+          "services/swarm-node/app/src/agents/swarm/graph/swarm_graph.py"
+        ],
+        "relevance_scores": {
+          "libraries/python/swarm-coordination/src/swarm_coordination/sanitize.py": 1.0,
+          "services/swarm-node/app/src/swarm_node/main.py": 0.7,
+          "services/swarm-node/app/src/agents/swarm/graph/swarm_graph.py": 0.5
+        }
+      },
+      "metadata": {
+        "difficulty": "medium",
+        "domain": "security"
+      }
+    },
+    {
+      "id": "search_009",
+      "type": "search",
+      "description": "Find Neo4j graph queries",
+      "query": "neo4j_client execute_query cypher",
+      "ground_truth": {
+        "relevant_chunks": [
+          "mcp_servers/device-map-mcp/app/src/device_map_mcp_server/neo4j_client.py",
+          "mcp_servers/rule-mcp/app/src/rule_mcp_server/neo4j_client.py",
+          "services/rest-api/app/src/rest_api/graph_client.py"
+        ],
+        "relevance_scores": {
+          "mcp_servers/device-map-mcp/app/src/device_map_mcp_server/neo4j_client.py": 1.0,
+          "mcp_servers/rule-mcp/app/src/rule_mcp_server/neo4j_client.py": 0.9,
+          "services/rest-api/app/src/rest_api/graph_client.py": 0.8
+        }
+      },
+      "metadata": {
+        "difficulty": "medium",
+        "domain": "database"
+      }
+    },
+    {
+      "id": "search_010",
+      "type": "search",
+      "description": "Find error handling middleware",
+      "query": "error_handling HTTPException handle_exception",
+      "ground_truth": {
+        "relevant_chunks": [
+          "services/rest-api/app/src/rest_api/middleware/error_handling.py",
+          "services/rest-api/app/src/rest_api/middleware/security.py",
+          "services/swarm-node/app/src/swarm_node/deep_agent_orchestrator.py"
+        ],
+        "relevance_scores": {
+          "services/rest-api/app/src/rest_api/middleware/error_handling.py": 1.0,
+          "services/rest-api/app/src/rest_api/middleware/security.py": 0.7,
+          "services/swarm-node/app/src/swarm_node/deep_agent_orchestrator.py": 0.5
+        }
+      },
+      "metadata": {
+        "difficulty": "easy",
+        "domain": "api"
+      }
+    }
+  ]
+}

@@ -1,0 +1,391 @@
+{
+  "description": "Code review test cases for SME agent evaluation",
+  "test_cases": [
+    {
+      "id": "review_001",
+      "type": "code_review",
+      "description": "Review PR adding new JWT claims",
+      "pr_number": "123",
+      "files_changed": [
+        "services/auth-service/internal/jwt/token.go",
+        "services/auth-service/internal/handlers/auth.go"
+      ],
+      "ground_truth": {
+        "expected_agents": ["artemis"],
+        "critical_issues": [
+          {
+            "file": "services/auth-service/internal/jwt/token.go",
+            "line": 45,
+            "issue": "JWT secret hardcoded",
+            "severity": "critical"
+          }
+        ],
+        "warnings": [
+          {
+            "file": "services/auth-service/internal/jwt/token.go",
+            "line": 78,
+            "issue": "Token expiration too long",
+            "severity": "warning"
+          }
+        ]
+      },
+      "metadata": {
+        "difficulty": "easy",
+        "domain": "authentication"
+      }
+    },
+    {
+      "id": "review_002",
+      "type": "code_review",
+      "description": "Review PR modifying database schema",
+      "pr_number": "124",
+      "files_changed": [
+        "services/postgres-init/migrations/alembic/versions/002_add_columns.py",
+        "services/postgres/app/src/postgres/models/task.py"
+      ],
+      "ground_truth": {
+        "expected_agents": ["dara"],
+        "critical_issues": [
+          {
+            "file": "services/postgres-init/migrations/alembic/versions/002_add_columns.py",
+            "line": 23,
+            "issue": "Missing downgrade implementation",
+            "severity": "critical"
+          }
+        ],
+        "warnings": []
+      },
+      "metadata": {
+        "difficulty": "medium",
+        "domain": "database"
+      }
+    },
+    {
+      "id": "review_003",
+      "type": "code_review",
+      "description": "Review PR touching multiple services",
+      "pr_number": "125",
+      "files_changed": [
+        "services/rest-api/app/routers/auth.py",
+        "services/postgres/app/src/postgres/models/session.py",
+        "services/ui/src/pages/Login.tsx"
+      ],
+      "ground_truth": {
+        "expected_agents": ["arik", "dara", "reina"],
+        "critical_issues": [],
+        "warnings": [
+          {
+            "file": "services/rest-api/app/routers/auth.py",
+            "line": 67,
+            "issue": "Missing rate limiting on login endpoint",
+            "severity": "warning"
+          }
+        ]
+      },
+      "metadata": {
+        "difficulty": "hard",
+        "domain": "multiple"
+      }
+    },
+    {
+      "id": "review_004",
+      "type": "code_review",
+      "description": "Review PR adding WebSocket streaming",
+      "pr_number": "126",
+      "files_changed": [
+        "services/swarm-node/app/websocket_handler.py",
+        "services/swarm-node/app/sanitize.py",
+        "services/swarm-node/app/main.py"
+      ],
+      "ground_truth": {
+        "expected_agents": ["orion", "kai"],
+        "critical_issues": [
+          {
+            "file": "services/swarm-node/app/sanitize.py",
+            "line": 34,
+            "issue": "No sanitization for environment variables in streaming",
+            "severity": "critical"
+          }
+        ],
+        "warnings": [
+          {
+            "file": "services/swarm-node/app/websocket_handler.py",
+            "line": 89,
+            "issue": "Missing error handling for disconnections",
+            "severity": "warning"
+          }
+        ]
+      },
+      "metadata": {
+        "difficulty": "hard",
+        "domain": "streaming"
+      }
+    },
+    {
+      "id": "review_005",
+      "type": "code_review",
+      "description": "Review PR adding Kafka consumer",
+      "pr_number": "127",
+      "files_changed": [
+        "services/event-swarm-node/consumers/task_consumer.py",
+        "libraries/python/faa-events/faa_events/schemas/task_events.py"
+      ],
+      "ground_truth": {
+        "expected_agents": ["evan"],
+        "critical_issues": [],
+        "warnings": [
+          {
+            "file": "services/event-swarm-node/consumers/task_consumer.py",
+            "line": 45,
+            "issue": "No DLQ handling for failed message processing",
+            "severity": "warning"
+          },
+          {
+            "file": "services/event-swarm-node/consumers/task_consumer.py",
+            "line": 67,
+            "issue": "Missing commit on error path",
+            "severity": "warning"
+          }
+        ]
+      },
+      "metadata": {
+        "difficulty": "medium",
+        "domain": "events"
+      }
+    },
+    {
+      "id": "review_006",
+      "type": "code_review",
+      "description": "Review PR adding MCP tool",
+      "pr_number": "128",
+      "files_changed": [
+        "mcp_servers/radkit/tools/device_backup.py",
+        "mcp_servers/radkit/server.py"
+      ],
+      "ground_truth": {
+        "expected_agents": ["marco"],
+        "critical_issues": [],
+        "warnings": [
+          {
+            "file": "mcp_servers/radkit/tools/device_backup.py",
+            "line": 23,
+            "issue": "Tool name doesn't follow naming convention (should use kebab-case)",
+            "severity": "warning"
+          },
+          {
+            "file": "mcp_servers/radkit/tools/device_backup.py",
+            "line": 45,
+            "issue": "Missing parameter description in schema",
+            "severity": "warning"
+          }
+        ]
+      },
+      "metadata": {
+        "difficulty": "easy",
+        "domain": "mcp"
+      }
+    },
+    {
+      "id": "review_007",
+      "type": "code_review",
+      "description": "Review PR modifying React components",
+      "pr_number": "129",
+      "files_changed": [
+        "services/ui/src/components/TaskList.tsx",
+        "services/ui/src/hooks/useTasks.ts"
+      ],
+      "ground_truth": {
+        "expected_agents": ["reina"],
+        "critical_issues": [],
+        "warnings": [
+          {
+            "file": "services/ui/src/components/TaskList.tsx",
+            "line": 34,
+            "issue": "useEffect missing dependency: 'filter'",
+            "severity": "warning"
+          },
+          {
+            "file": "services/ui/src/hooks/useTasks.ts",
+            "line": 12,
+            "issue": "Using 'any' type for API response",
+            "severity": "warning"
+          }
+        ]
+      },
+      "metadata": {
+        "difficulty": "medium",
+        "domain": "frontend"
+      }
+    },
+    {
+      "id": "review_008",
+      "type": "code_review",
+      "description": "Review PR adding LangGraph agent",
+      "pr_number": "130",
+      "files_changed": [
+        "agents/planner-agent/planner.py",
+        "libraries/python/deep-agent/deep_agent/graph.py"
+      ],
+      "ground_truth": {
+        "expected_agents": ["petra"],
+        "critical_issues": [],
+        "warnings": [
+          {
+            "file": "agents/planner-agent/planner.py",
+            "line": 78,
+            "issue": "No error handling in agent node",
+            "severity": "warning"
+          },
+          {
+            "file": "libraries/python/deep-agent/deep_agent/graph.py",
+            "line": 56,
+            "issue": "Missing checkpoint configuration",
+            "severity": "warning"
+          }
+        ]
+      },
+      "metadata": {
+        "difficulty": "hard",
+        "domain": "agents"
+      }
+    },
+    {
+      "id": "review_009",
+      "type": "code_review",
+      "description": "Review PR adding LLM evaluation rubric",
+      "pr_number": "131",
+      "files_changed": [
+        "tests/e2e/rubric-validation/rubrics/code_quality.yaml",
+        "tests/e2e/rubric-validation/judge.py"
+      ],
+      "ground_truth": {
+        "expected_agents": ["luna"],
+        "critical_issues": [],
+        "warnings": [
+          {
+            "file": "tests/e2e/rubric-validation/rubrics/code_quality.yaml",
+            "line": 12,
+            "issue": "Rubric criteria missing weight specification",
+            "severity": "warning"
+          },
+          {
+            "file": "tests/e2e/rubric-validation/judge.py",
+            "line": 34,
+            "issue": "No validation of rubric score ranges",
+            "severity": "warning"
+          }
+        ]
+      },
+      "metadata": {
+        "difficulty": "medium",
+        "domain": "testing"
+      }
+    },
+    {
+      "id": "review_010",
+      "type": "code_review",
+      "description": "Review PR with SQL injection vulnerability",
+      "pr_number": "132",
+      "files_changed": [
+        "services/postgres/app/src/postgres/queries/custom_query.py",
+        "services/rest-api/app/routers/reports.py"
+      ],
+      "ground_truth": {
+        "expected_agents": ["dara", "arik"],
+        "critical_issues": [
+          {
+            "file": "services/postgres/app/src/postgres/queries/custom_query.py",
+            "line": 23,
+            "issue": "SQL injection vulnerability: using string formatting",
+            "severity": "critical"
+          }
+        ],
+        "warnings": [
+          {
+            "file": "services/rest-api/app/routers/reports.py",
+            "line": 45,
+            "issue": "No input validation on query parameters",
+            "severity": "warning"
+          }
+        ]
+      },
+      "metadata": {
+        "difficulty": "medium",
+        "domain": "security"
+      }
+    },
+    {
+      "id": "review_011",
+      "type": "code_review",
+      "description": "Review PR adding auto-increment IDs",
+      "pr_number": "133",
+      "files_changed": [
+        "services/postgres/app/src/postgres/models/device.py",
+        "services/postgres-init/migrations/alembic/versions/005_create_device.py"
+      ],
+      "ground_truth": {
+        "expected_agents": ["dara"],
+        "critical_issues": [
+          {
+            "file": "services/postgres/app/src/postgres/models/device.py",
+            "line": 12,
+            "issue": "Using auto-increment IDs instead of UUIDs",
+            "severity": "critical"
+          }
+        ],
+        "warnings": [
+          {
+            "file": "services/postgres-init/migrations/alembic/versions/005_create_device.py",
+            "line": 34,
+            "issue": "Missing index on frequently queried column",
+            "severity": "warning"
+          }
+        ]
+      },
+      "metadata": {
+        "difficulty": "easy",
+        "domain": "database"
+      }
+    },
+    {
+      "id": "review_012",
+      "type": "code_review",
+      "description": "Review PR modifying authentication flow",
+      "pr_number": "134",
+      "files_changed": [
+        "services/auth-service/internal/handlers/auth.go",
+        "services/auth-service/internal/security/password.go",
+        "services/rest-api/app/routers/auth.py"
+      ],
+      "ground_truth": {
+        "expected_agents": ["artemis", "arik"],
+        "critical_issues": [
+          {
+            "file": "services/auth-service/internal/security/password.go",
+            "line": 56,
+            "issue": "bcrypt cost factor too low (< 12)",
+            "severity": "critical"
+          }
+        ],
+        "warnings": [
+          {
+            "file": "services/auth-service/internal/handlers/auth.go",
+            "line": 89,
+            "issue": "Same error message for invalid user and invalid password (user enumeration)",
+            "severity": "warning"
+          },
+          {
+            "file": "services/rest-api/app/routers/auth.py",
+            "line": 34,
+            "issue": "No account lockout after failed attempts",
+            "severity": "warning"
+          }
+        ]
+      },
+      "metadata": {
+        "difficulty": "hard",
+        "domain": "security"
+      }
+    }
+  ]
+}

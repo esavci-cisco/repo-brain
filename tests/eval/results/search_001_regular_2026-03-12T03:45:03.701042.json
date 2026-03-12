@@ -1,0 +1,56 @@
+{
+  "test_id": "search_001",
+  "scenario": "regular",
+  "timestamp": "2026-03-12T03:45:03.701042",
+  "test_type": "search",
+  "description": "Find JWT authentication implementation",
+  "metrics": {
+    "retrieval": {
+      "precision@1": 0.0,
+      "precision@3": 0.3333333333333333,
+      "precision@5": 0.4,
+      "recall@1": 0.0,
+      "recall@3": 0.3333333333333333,
+      "recall@5": 0.6666666666666666,
+      "mrr": 0.3333333333333333,
+      "ndcg@3": 0.2540861140189272,
+      "ndcg@5": 0.45105819349077475,
+      "avg_score": 1.0
+    },
+    "task_completion": null,
+    "scope_analysis": null,
+    "code_understanding": null,
+    "sme_agents": null,
+    "performance": {
+      "latency": {
+        "p50_ms": 155.6680202484131,
+        "p95_ms": 0.0,
+        "p99_ms": 0.0
+      },
+      "tokens": {
+        "prompt": 0,
+        "completion": 0,
+        "total": 0,
+        "context": 0
+      },
+      "memory_mb": 0.0
+    }
+  },
+  "raw_output": "{\n  \"retrieved\": [\n    \"services/auth-service/handlers/verify.go\",\n    \"services/auth-service/TESTING.md\",\n    \"services/auth-service/utils/jwt.go\",\n    \"services/auth-service/utils/jwt_test.go\"\n  ],\n  \"scores\": [\n    1.0,\n    1.0,\n    1.0,\n    1.0\n  ]\n}",
+  "ground_truth": {
+    "relevant_chunks": [
+      "services/auth-service/utils/jwt.go",
+      "services/auth-service/utils/jwt_test.go",
+      "services/auth-service/handlers/login.go"
+    ],
+    "relevance_scores": {
+      "services/auth-service/utils/jwt.go": 1.0,
+      "services/auth-service/utils/jwt_test.go": 0.9,
+      "services/auth-service/handlers/login.go": 0.8
+    }
+  },
+  "metadata": {
+    "difficulty": "easy",
+    "domain": "authentication"
+  }
+}

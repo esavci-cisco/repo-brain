@@ -1,0 +1,56 @@
+{
+  "test_id": "search_001",
+  "scenario": "repo-brain",
+  "timestamp": "2026-03-12T03:37:51.208246",
+  "test_type": "search",
+  "description": "Find JWT authentication implementation",
+  "metrics": {
+    "retrieval": {
+      "precision@1": 1.0,
+      "precision@3": 0.6666666666666666,
+      "precision@5": 0.4,
+      "recall@1": 0.3333333333333333,
+      "recall@3": 0.3333333333333333,
+      "recall@5": 0.3333333333333333,
+      "mrr": 1.0,
+      "ndcg@3": 0.6860325078511035,
+      "ndcg@5": 0.6860325078511035,
+      "avg_score": 0.59882
+    },
+    "task_completion": null,
+    "scope_analysis": null,
+    "code_understanding": null,
+    "sme_agents": null,
+    "performance": {
+      "latency": {
+        "p50_ms": 1576.0650634765625,
+        "p95_ms": 0.0,
+        "p99_ms": 0.0
+      },
+      "tokens": {
+        "prompt": 0,
+        "completion": 0,
+        "total": 0,
+        "context": 0
+      },
+      "memory_mb": 0.0
+    }
+  },
+  "raw_output": "{\n  \"retrieved\": [\n    \"services/auth-service/utils/jwt_test.go\",\n    \"services/docs/app/src/docs/developer/architecture/general.md\",\n    \"services/auth-service/utils/jwt_test.go\",\n    \"mcp_servers/s3/app/src/s3_server/auth/decoder.py\",\n    \"mcp_servers/radkit/app/src/radkit_server/auth/encoder.py\",\n    \"libraries/python/faa-auth-delegation/src/faa_auth_delegation/iam.py\",\n    \"services/rest-api/app/src/rest_api/middleware/security.py\",\n    \"scripts/preflight_dotenv.py\",\n    \"mcp_servers/radkit/app/tests/test_auth.py\",\n    \"services/auth-service/utils/jwt.go\"\n  ],\n  \"scores\": [\n    0.6624,\n    0.662,\n    0.64,\n    0.5955,\n    0.5794,\n    0.573,\n    0.5724,\n    0.5693,\n    0.5676,\n    0.5666\n  ]\n}",
+  "ground_truth": {
+    "relevant_chunks": [
+      "services/auth-service/utils/jwt.go",
+      "services/auth-service/utils/jwt_test.go",
+      "services/auth-service/handlers/login.go"
+    ],
+    "relevance_scores": {
+      "services/auth-service/utils/jwt.go": 1.0,
+      "services/auth-service/utils/jwt_test.go": 0.9,
+      "services/auth-service/handlers/login.go": 0.8
+    }
+  },
+  "metadata": {
+    "difficulty": "easy",
+    "domain": "authentication"
+  }
+}

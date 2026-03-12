@@ -1,0 +1,56 @@
+{
+  "test_id": "search_010",
+  "scenario": "repo-brain",
+  "timestamp": "2026-03-12T03:45:02.481578",
+  "test_type": "search",
+  "description": "Find error handling middleware",
+  "metrics": {
+    "retrieval": {
+      "precision@1": 1.0,
+      "precision@3": 1.0,
+      "precision@5": 0.8,
+      "recall@1": 0.3333333333333333,
+      "recall@3": 0.3333333333333333,
+      "recall@5": 0.3333333333333333,
+      "mrr": 1.0,
+      "ndcg@3": 1.259674702917634,
+      "ndcg@5": 1.5142642145781826,
+      "avg_score": 0.5243300000000001
+    },
+    "task_completion": null,
+    "scope_analysis": null,
+    "code_understanding": null,
+    "sme_agents": null,
+    "performance": {
+      "latency": {
+        "p50_ms": 1217.8318500518799,
+        "p95_ms": 0.0,
+        "p99_ms": 0.0
+      },
+      "tokens": {
+        "prompt": 0,
+        "completion": 0,
+        "total": 0,
+        "context": 0
+      },
+      "memory_mb": 0.0
+    }
+  },
+  "raw_output": "{\n  \"retrieved\": [\n    \"services/rest-api/app/src/rest_api/middleware/error_handling.py\",\n    \"services/rest-api/app/src/rest_api/middleware/error_handling.py\",\n    \"services/rest-api/app/src/rest_api/middleware/error_handling.py\",\n    \"services/rest-api/app/src/rest_api/middleware/error_handling.py\",\n    \"mcp_servers/s3_http/app/src/s3_http_server/exceptions.py\",\n    \"libraries/python/faa-models/src/faa_models/exceptions.py\",\n    \"services/rest-api/app/src/rest_api/middleware/error_handling.py\",\n    \"services/rest-api/app/src/rest_api/middleware/error_handling.py\",\n    \"services/rest-api/app/src/rest_api/middleware/error_handling.py\",\n    \"libraries/python/faa-models/src/faa_models/exceptions.py\"\n  ],\n  \"scores\": [\n    0.5967,\n    0.5754,\n    0.5668,\n    0.5481,\n    0.5252,\n    0.5167,\n    0.5064,\n    0.4747,\n    0.4688,\n    0.4645\n  ]\n}",
+  "ground_truth": {
+    "relevant_chunks": [
+      "services/rest-api/app/src/rest_api/middleware/error_handling.py",
+      "services/rest-api/app/src/rest_api/middleware/security.py",
+      "services/swarm-node/app/src/swarm_node/deep_agent_orchestrator.py"
+    ],
+    "relevance_scores": {
+      "services/rest-api/app/src/rest_api/middleware/error_handling.py": 1.0,
+      "services/rest-api/app/src/rest_api/middleware/security.py": 0.7,
+      "services/swarm-node/app/src/swarm_node/deep_agent_orchestrator.py": 0.5
+    }
+  },
+  "metadata": {
+    "difficulty": "easy",
+    "domain": "api"
+  }
+}
