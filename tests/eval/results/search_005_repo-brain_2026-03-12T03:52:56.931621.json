@@ -1,0 +1,56 @@
+{
+  "test_id": "search_005",
+  "scenario": "repo-brain",
+  "timestamp": "2026-03-12T03:52:56.931621",
+  "test_type": "search",
+  "description": "Find password hashing implementation",
+  "metrics": {
+    "retrieval": {
+      "precision@1": 1.0,
+      "precision@3": 0.6666666666666666,
+      "precision@5": 0.4,
+      "recall@1": 0.3333333333333333,
+      "recall@3": 0.3333333333333333,
+      "recall@5": 0.3333333333333333,
+      "mrr": 1.0,
+      "ndcg@3": 0.7653606369886217,
+      "ndcg@5": 0.7653606369886217,
+      "avg_score": 0.5645500000000001
+    },
+    "task_completion": null,
+    "scope_analysis": null,
+    "code_understanding": null,
+    "sme_agents": null,
+    "performance": {
+      "latency": {
+        "p50_ms": 1334.8770141601562,
+        "p95_ms": 0.0,
+        "p99_ms": 0.0
+      },
+      "tokens": {
+        "prompt": 0,
+        "completion": 0,
+        "total": 0,
+        "context": 0
+      },
+      "memory_mb": 0.0
+    }
+  },
+  "raw_output": "{\n  \"retrieved\": [\n    \"services/auth-service/utils/password_test.go\",\n    \"services/auth-service/utils/password_test.go\",\n    \"services/auth-service/TESTING.md\",\n    \"libraries/python/faa-models/src/faa_models/database/auth.py\",\n    \"scripts/create_test_user.py\",\n    \"libraries/python/faa-models/src/faa_models/database/auth.py\",\n    \"services/auth-service/utils/password.go\",\n    \"services/auth-service/utils/password_test.go\",\n    \"services/docs/app/src/docs/developer/style-guides/go-style-guide.md\",\n    \"libraries/python/agent-security/src/agent_security/encryption.py\"\n  ],\n  \"scores\": [\n    0.687,\n    0.635,\n    0.605,\n    0.6012,\n    0.5854,\n    0.5832,\n    0.5447,\n    0.5219,\n    0.4455,\n    0.4366\n  ]\n}",
+  "ground_truth": {
+    "relevant_chunks": [
+      "services/auth-service/utils/password.go",
+      "services/auth-service/utils/password_test.go",
+      "services/auth-service/handlers/register.go"
+    ],
+    "relevance_scores": {
+      "services/auth-service/utils/password.go": 1.0,
+      "services/auth-service/utils/password_test.go": 0.9,
+      "services/auth-service/handlers/register.go": 0.7
+    }
+  },
+  "metadata": {
+    "difficulty": "easy",
+    "domain": "authentication"
+  }
+}

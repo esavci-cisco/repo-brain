@@ -1,0 +1,56 @@
+{
+  "test_id": "search_009",
+  "scenario": "regular",
+  "timestamp": "2026-03-12T03:53:04.910873",
+  "test_type": "search",
+  "description": "Find Neo4j graph queries",
+  "metrics": {
+    "retrieval": {
+      "precision@1": 0.0,
+      "precision@3": 0.0,
+      "precision@5": 0.0,
+      "recall@1": 0.0,
+      "recall@3": 0.0,
+      "recall@5": 0.0,
+      "mrr": 0.0,
+      "ndcg@3": 0.0,
+      "ndcg@5": 0.0,
+      "avg_score": 1.0
+    },
+    "task_completion": null,
+    "scope_analysis": null,
+    "code_understanding": null,
+    "sme_agents": null,
+    "performance": {
+      "latency": {
+        "p50_ms": 63.77816200256348,
+        "p95_ms": 0.0,
+        "p99_ms": 0.0
+      },
+      "tokens": {
+        "prompt": 0,
+        "completion": 0,
+        "total": 0,
+        "context": 0
+      },
+      "memory_mb": 0.0
+    }
+  },
+  "raw_output": "{\n  \"retrieved\": [\n    \"mcp_servers/device-map-mcp/app/src/device_map_mcp_server/server.py\",\n    \"mcp_servers/device-map-mcp/app/tests/test_server.py\",\n    \"mcp_servers/device-map-mcp/app/tests/test_server_coverage.py\"\n  ],\n  \"scores\": [\n    1.0,\n    1.0,\n    1.0\n  ]\n}",
+  "ground_truth": {
+    "relevant_chunks": [
+      "mcp_servers/device-map-mcp/app/src/device_map_mcp_server/neo4j_client.py",
+      "mcp_servers/rule-mcp/app/src/rule_mcp_server/neo4j_client.py",
+      "services/rest-api/app/src/rest_api/graph_client.py"
+    ],
+    "relevance_scores": {
+      "mcp_servers/device-map-mcp/app/src/device_map_mcp_server/neo4j_client.py": 1.0,
+      "mcp_servers/rule-mcp/app/src/rule_mcp_server/neo4j_client.py": 0.9,
+      "services/rest-api/app/src/rest_api/graph_client.py": 0.8
+    }
+  },
+  "metadata": {
+    "difficulty": "medium",
+    "domain": "database"
+  }
+}

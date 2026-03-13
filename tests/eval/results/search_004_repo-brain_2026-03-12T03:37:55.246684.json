@@ -1,0 +1,56 @@
+{
+  "test_id": "search_004",
+  "scenario": "repo-brain",
+  "timestamp": "2026-03-12T03:37:55.246684",
+  "test_type": "search",
+  "description": "Find WebSocket streaming implementation",
+  "metrics": {
+    "retrieval": {
+      "precision@1": 0.0,
+      "precision@3": 0.0,
+      "precision@5": 0.2,
+      "recall@1": 0.0,
+      "recall@3": 0.0,
+      "recall@5": 0.3333333333333333,
+      "mrr": 0.25,
+      "ndcg@3": 0.0,
+      "ndcg@5": 0.20210734650054757,
+      "avg_score": 0.64984
+    },
+    "task_completion": null,
+    "scope_analysis": null,
+    "code_understanding": null,
+    "sme_agents": null,
+    "performance": {
+      "latency": {
+        "p50_ms": 1173.6669540405273,
+        "p95_ms": 0.0,
+        "p99_ms": 0.0
+      },
+      "tokens": {
+        "prompt": 0,
+        "completion": 0,
+        "total": 0,
+        "context": 0
+      },
+      "memory_mb": 0.0
+    }
+  },
+  "raw_output": "{\n  \"retrieved\": [\n    \"services/swarm-node/test_websocket_minimal.py\",\n    \"scripts/validate_context_system.py\",\n    \"examples/llm_planner_client_example.py\",\n    \"services/rest-api/app/src/rest_api/services/websocket_broadcaster.py\",\n    \"scripts/validate_context_system.py\",\n    \"services/ui/app/enhanced_stream_manager.py\",\n    \"services/docs/app/src/docs/developer/architecture/general.md\",\n    \"libraries/python/schemas/src/schemas/websocket/chat.py\",\n    \"scripts/validate_context_system.py\",\n    \"libraries/python/schemas/src/schemas/websocket/models.py\"\n  ],\n  \"scores\": [\n    0.6801,\n    0.6779,\n    0.6755,\n    0.6539,\n    0.6529,\n    0.6489,\n    0.6351,\n    0.6303,\n    0.627,\n    0.6168\n  ]\n}",
+  "ground_truth": {
+    "relevant_chunks": [
+      "services/swarm-node/app/src/swarm_node/main.py",
+      "services/rest-api/app/src/rest_api/services/websocket_broadcaster.py",
+      "services/rest-api/app/src/rest_api/main.py"
+    ],
+    "relevance_scores": {
+      "services/swarm-node/app/src/swarm_node/main.py": 1.0,
+      "services/rest-api/app/src/rest_api/services/websocket_broadcaster.py": 0.9,
+      "services/rest-api/app/src/rest_api/main.py": 0.7
+    }
+  },
+  "metadata": {
+    "difficulty": "medium",
+    "domain": "networking"
+  }
+}

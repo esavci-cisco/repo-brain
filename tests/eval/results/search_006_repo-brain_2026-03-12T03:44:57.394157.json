@@ -1,0 +1,56 @@
+{
+  "test_id": "search_006",
+  "scenario": "repo-brain",
+  "timestamp": "2026-03-12T03:44:57.394157",
+  "test_type": "search",
+  "description": "Find LangGraph agent workflow",
+  "metrics": {
+    "retrieval": {
+      "precision@1": 0.0,
+      "precision@3": 0.3333333333333333,
+      "precision@5": 0.4,
+      "recall@1": 0.0,
+      "recall@3": 0.3333333333333333,
+      "recall@5": 0.3333333333333333,
+      "mrr": 0.5,
+      "ndcg@3": 0.2960819109658652,
+      "ndcg@5": 0.47762370350321787,
+      "avg_score": 0.44925999999999994
+    },
+    "task_completion": null,
+    "scope_analysis": null,
+    "code_understanding": null,
+    "sme_agents": null,
+    "performance": {
+      "latency": {
+        "p50_ms": 1191.0221576690674,
+        "p95_ms": 0.0,
+        "p99_ms": 0.0
+      },
+      "tokens": {
+        "prompt": 0,
+        "completion": 0,
+        "total": 0,
+        "context": 0
+      },
+      "memory_mb": 0.0
+    }
+  },
+  "raw_output": "{\n  \"retrieved\": [\n    \"libraries/python/deep-agent/src/deep_agent/orchestration/builder.py\",\n    \"libraries/python/deep-agent/src/deep_agent/orchestration/state_graph_builder.py\",\n    \"services/swarm-node/app/src/swarm_node/deep_agent_orchestrator.py\",\n    \"services/docs/app/src/docs/developer/agents/deep-agents.md\",\n    \"libraries/python/deep-agent/src/deep_agent/orchestration/state_graph_builder.py\",\n    \"libraries/python/deep-agent/src/deep_agent/orchestration/state_graph_builder.py\",\n    \"services/rest-api/app/src/rest_api/services/validation_service.py\",\n    \"services/docs/app/src/docs/developer/features/rules/discovery-system.md\",\n    \"services/swarm-node/app/tests/unit/test_swarm_graph.py\",\n    \"libraries/python/deep-agent/tests/test_core_state.py\"\n  ],\n  \"scores\": [\n    0.4749,\n    0.4661,\n    0.4655,\n    0.4589,\n    0.4493,\n    0.4472,\n    0.4423,\n    0.432,\n    0.4306,\n    0.4258\n  ]\n}",
+  "ground_truth": {
+    "relevant_chunks": [
+      "services/swarm-node/app/src/agents/swarm/graph/swarm_graph.py",
+      "libraries/python/deep-agent/src/deep_agent/orchestration/state_graph_builder.py",
+      "libraries/python/swarm-coordination/src/swarm_coordination/intent_router.py"
+    ],
+    "relevance_scores": {
+      "services/swarm-node/app/src/agents/swarm/graph/swarm_graph.py": 1.0,
+      "libraries/python/deep-agent/src/deep_agent/orchestration/state_graph_builder.py": 0.9,
+      "libraries/python/swarm-coordination/src/swarm_coordination/intent_router.py": 0.7
+    }
+  },
+  "metadata": {
+    "difficulty": "hard",
+    "domain": "agents"
+  }
+}

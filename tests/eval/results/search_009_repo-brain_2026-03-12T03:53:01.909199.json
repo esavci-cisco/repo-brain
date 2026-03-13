@@ -1,0 +1,56 @@
+{
+  "test_id": "search_009",
+  "scenario": "repo-brain",
+  "timestamp": "2026-03-12T03:53:01.909199",
+  "test_type": "search",
+  "description": "Find Neo4j graph queries",
+  "metrics": {
+    "retrieval": {
+      "precision@1": 0.0,
+      "precision@3": 0.3333333333333333,
+      "precision@5": 0.4,
+      "recall@1": 0.0,
+      "recall@3": 0.3333333333333333,
+      "recall@5": 0.6666666666666666,
+      "mrr": 0.5,
+      "ndcg@3": 0.320620978607782,
+      "ndcg@5": 0.4778912609878425,
+      "avg_score": 0.7536400000000001
+    },
+    "task_completion": null,
+    "scope_analysis": null,
+    "code_understanding": null,
+    "sme_agents": null,
+    "performance": {
+      "latency": {
+        "p50_ms": 1150.885820388794,
+        "p95_ms": 0.0,
+        "p99_ms": 0.0
+      },
+      "tokens": {
+        "prompt": 0,
+        "completion": 0,
+        "total": 0,
+        "context": 0
+      },
+      "memory_mb": 0.0
+    }
+  },
+  "raw_output": "{\n  \"retrieved\": [\n    \"services/neo4j-init/init_neo4j.py\",\n    \"mcp_servers/device-map-mcp/app/src/device_map_mcp_server/neo4j_client.py\",\n    \"services/neo4j-init/init_neo4j.py\",\n    \"services/neo4j-init/init_neo4j.py\",\n    \"services/rest-api/app/src/rest_api/graph_client.py\",\n    \"mcp_servers/device-map-mcp/app/src/device_map_mcp_server/neo4j_client.py\",\n    \"libraries/python/kg-schema/src/kg_schema/runtime/exceptions.py\",\n    \"services/rule-grpc-api/tests/test_mcp_neo4j_tools.py\",\n    \"mcp_servers/device-map-mcp/app/src/device_map_mcp_server/server.py\",\n    \"services/rule-grpc-api/src/rule_grpc_api/mcp/neo4j_tools.py\"\n  ],\n  \"scores\": [\n    0.8142,\n    0.8054,\n    0.7812,\n    0.7727,\n    0.7627,\n    0.7605,\n    0.7255,\n    0.7164,\n    0.7033,\n    0.6945\n  ]\n}",
+  "ground_truth": {
+    "relevant_chunks": [
+      "mcp_servers/device-map-mcp/app/src/device_map_mcp_server/neo4j_client.py",
+      "mcp_servers/rule-mcp/app/src/rule_mcp_server/neo4j_client.py",
+      "services/rest-api/app/src/rest_api/graph_client.py"
+    ],
+    "relevance_scores": {
+      "mcp_servers/device-map-mcp/app/src/device_map_mcp_server/neo4j_client.py": 1.0,
+      "mcp_servers/rule-mcp/app/src/rule_mcp_server/neo4j_client.py": 0.9,
+      "services/rest-api/app/src/rest_api/graph_client.py": 0.8
+    }
+  },
+  "metadata": {
+    "difficulty": "medium",
+    "domain": "database"
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "test_id": "search_005",
+  "scenario": "regular",
+  "timestamp": "2026-03-12T03:45:04.166924",
+  "test_type": "search",
+  "description": "Find password hashing implementation",
+  "metrics": {
+    "retrieval": {
+      "precision@1": 1.0,
+      "precision@3": 0.6666666666666666,
+      "precision@5": 0.4,
+      "recall@1": 0.3333333333333333,
+      "recall@3": 0.6666666666666666,
+      "recall@5": 0.6666666666666666,
+      "mrr": 1.0,
+      "ndcg@3": 0.8175027176578169,
+      "ndcg@5": 0.8175027176578169,
+      "avg_score": 1.0
+    },
+    "task_completion": null,
+    "scope_analysis": null,
+    "code_understanding": null,
+    "sme_agents": null,
+    "performance": {
+      "latency": {
+        "p50_ms": 63.33112716674805,
+        "p95_ms": 0.0,
+        "p99_ms": 0.0
+      },
+      "tokens": {
+        "prompt": 0,
+        "completion": 0,
+        "total": 0,
+        "context": 0
+      },
+      "memory_mb": 0.0
+    }
+  },
+  "raw_output": "{\n  \"retrieved\": [\n    \"services/auth-service/utils/password.go\",\n    \"services/auth-service/utils/password_test.go\"\n  ],\n  \"scores\": [\n    1.0,\n    1.0\n  ]\n}",
+  "ground_truth": {
+    "relevant_chunks": [
+      "services/auth-service/utils/password.go",
+      "services/auth-service/utils/password_test.go",
+      "services/auth-service/handlers/register.go"
+    ],
+    "relevance_scores": {
+      "services/auth-service/utils/password.go": 1.0,
+      "services/auth-service/utils/password_test.go": 0.9,
+      "services/auth-service/handlers/register.go": 0.7
+    }
+  },
+  "metadata": {
+    "difficulty": "easy",
+    "domain": "authentication"
+  }
+}

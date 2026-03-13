@@ -1,0 +1,250 @@
+{
+  "description": "Scope analysis test cases for task scoping",
+  "test_cases": [
+    {
+      "id": "scope_001",
+      "type": "scope",
+      "description": "Add rate limiting to REST API endpoints",
+      "ground_truth": {
+        "files": [
+          "services/rest-api/app/middleware/rate_limiter.py",
+          "services/rest-api/app/main.py",
+          "services/rest-api/app/config.py"
+        ],
+        "services": [
+          "rest-api",
+          "redis"
+        ],
+        "dependencies": [
+          "fastapi-limiter",
+          "redis"
+        ],
+        "risk_level": "medium"
+      },
+      "metadata": {
+        "difficulty": "medium",
+        "domain": "api"
+      }
+    },
+    {
+      "id": "scope_002",
+      "type": "scope",
+      "description": "Fix password hashing vulnerability",
+      "ground_truth": {
+        "files": [
+          "services/auth-service/internal/security/password.go",
+          "services/auth-service/internal/handlers/auth.go"
+        ],
+        "services": [
+          "auth-service"
+        ],
+        "dependencies": [
+          "golang.org/x/crypto/bcrypt"
+        ],
+        "risk_level": "critical"
+      },
+      "metadata": {
+        "difficulty": "easy",
+        "domain": "security"
+      }
+    },
+    {
+      "id": "scope_003",
+      "type": "scope",
+      "description": "Add pagination to task list endpoint",
+      "ground_truth": {
+        "files": [
+          "services/rest-api/app/routers/tasks.py",
+          "services/postgres/app/src/postgres/queries/task_queries.py",
+          "services/ui/src/components/TaskList.tsx"
+        ],
+        "services": [
+          "rest-api",
+          "postgres",
+          "ui"
+        ],
+        "dependencies": [],
+        "risk_level": "low"
+      },
+      "metadata": {
+        "difficulty": "easy",
+        "domain": "api"
+      }
+    },
+    {
+      "id": "scope_004",
+      "type": "scope",
+      "description": "Implement WebSocket connection pooling for swarm nodes",
+      "ground_truth": {
+        "files": [
+          "services/swarm-node/app/websocket_handler.py",
+          "services/swarm-node/app/connection_pool.py",
+          "libraries/python/swarm-coordination/swarm_coordination/websocket.py",
+          "services/swarm-node/app/config.py"
+        ],
+        "services": [
+          "swarm-node"
+        ],
+        "dependencies": [
+          "websockets",
+          "asyncio"
+        ],
+        "risk_level": "high"
+      },
+      "metadata": {
+        "difficulty": "hard",
+        "domain": "networking"
+      }
+    },
+    {
+      "id": "scope_005",
+      "type": "scope",
+      "description": "Add dead letter queue handling for failed Kafka events",
+      "ground_truth": {
+        "files": [
+          "services/event-swarm-node/consumers/task_consumer.py",
+          "services/event-swarm-node/dlq_handler.py",
+          "libraries/python/faa-events/faa_events/dlq.py",
+          "services/event-swarm-node/config.py"
+        ],
+        "services": [
+          "event-swarm-node",
+          "kafka"
+        ],
+        "dependencies": [
+          "aiokafka"
+        ],
+        "risk_level": "medium"
+      },
+      "metadata": {
+        "difficulty": "medium",
+        "domain": "events"
+      }
+    },
+    {
+      "id": "scope_006",
+      "type": "scope",
+      "description": "Add database migration for task priority field",
+      "ground_truth": {
+        "files": [
+          "services/postgres-init/migrations/alembic/versions/XXX_add_task_priority.py",
+          "services/postgres/app/src/postgres/models/task.py",
+          "services/rest-api/app/routers/tasks.py",
+          "services/ui/src/components/TaskList.tsx"
+        ],
+        "services": [
+          "postgres",
+          "postgres-init",
+          "rest-api",
+          "ui"
+        ],
+        "dependencies": [],
+        "risk_level": "medium"
+      },
+      "metadata": {
+        "difficulty": "medium",
+        "domain": "database"
+      }
+    },
+    {
+      "id": "scope_007",
+      "type": "scope",
+      "description": "Implement streaming response sanitization for data leak prevention",
+      "ground_truth": {
+        "files": [
+          "services/swarm-node/app/sanitize.py",
+          "services/swarm-node/app/main.py",
+          "services/swarm-node/app/config.py"
+        ],
+        "services": [
+          "swarm-node"
+        ],
+        "dependencies": [
+          "re",
+          "pydantic"
+        ],
+        "risk_level": "critical"
+      },
+      "metadata": {
+        "difficulty": "hard",
+        "domain": "security"
+      }
+    },
+    {
+      "id": "scope_008",
+      "type": "scope",
+      "description": "Add MCP tool for device configuration backup",
+      "ground_truth": {
+        "files": [
+          "mcp_servers/radkit/tools/backup.py",
+          "mcp_servers/radkit/server.py",
+          "agents/task/config.yaml"
+        ],
+        "services": [
+          "radkit-rest-api",
+          "mcp-radkit"
+        ],
+        "dependencies": [
+          "fastmcp"
+        ],
+        "risk_level": "low"
+      },
+      "metadata": {
+        "difficulty": "medium",
+        "domain": "mcp"
+      }
+    },
+    {
+      "id": "scope_009",
+      "type": "scope",
+      "description": "Implement LangGraph checkpoint persistence for agent state recovery",
+      "ground_truth": {
+        "files": [
+          "services/swarm-node/app/agent_workflow.py",
+          "libraries/python/deep-agent/deep_agent/graph.py",
+          "services/swarm-node/app/checkpoint_store.py",
+          "services/postgres/app/src/postgres/models/checkpoint.py"
+        ],
+        "services": [
+          "swarm-node",
+          "postgres"
+        ],
+        "dependencies": [
+          "langgraph",
+          "langchain-postgres"
+        ],
+        "risk_level": "high"
+      },
+      "metadata": {
+        "difficulty": "hard",
+        "domain": "agents"
+      }
+    },
+    {
+      "id": "scope_010",
+      "type": "scope",
+      "description": "Add user authentication to UI with JWT token storage",
+      "ground_truth": {
+        "files": [
+          "services/ui/src/components/Login.tsx",
+          "services/ui/src/contexts/AuthContext.tsx",
+          "services/ui/src/api/auth.ts",
+          "services/ui/src/hooks/useAuth.ts"
+        ],
+        "services": [
+          "ui",
+          "auth-service"
+        ],
+        "dependencies": [
+          "axios",
+          "react-router-dom"
+        ],
+        "risk_level": "high"
+      },
+      "metadata": {
+        "difficulty": "medium",
+        "domain": "frontend"
+      }
+    }
+  ]
+}

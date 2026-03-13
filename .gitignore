@@ -27,6 +27,7 @@ venv/
 coverage/
 htmlcov/
 .coverage
+tests/eval/results_e2e/
 
 # uv
 uv.lock

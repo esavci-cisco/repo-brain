@@ -1,0 +1,56 @@
+{
+  "test_id": "search_002",
+  "scenario": "regular",
+  "timestamp": "2026-03-12T03:53:04.389325",
+  "test_type": "search",
+  "description": "Find database migration code",
+  "metrics": {
+    "retrieval": {
+      "precision@1": 0.0,
+      "precision@3": 0.0,
+      "precision@5": 0.0,
+      "recall@1": 0.0,
+      "recall@3": 0.0,
+      "recall@5": 0.0,
+      "mrr": 0.0,
+      "ndcg@3": 0.0,
+      "ndcg@5": 0.0,
+      "avg_score": 1.0
+    },
+    "task_completion": null,
+    "scope_analysis": null,
+    "code_understanding": null,
+    "sme_agents": null,
+    "performance": {
+      "latency": {
+        "p50_ms": 82.9920768737793,
+        "p95_ms": 0.0,
+        "p99_ms": 0.0
+      },
+      "tokens": {
+        "prompt": 0,
+        "completion": 0,
+        "total": 0,
+        "context": 0
+      },
+      "memory_mb": 0.0
+    }
+  },
+  "raw_output": "{\n  \"retrieved\": [\n    \"tiles/migration-troubleshooting/migration-troubleshooting/SKILL.md\",\n    \"tiles/migration-troubleshooting/evals/instructions.json\",\n    \"POSTGRES_INIT_TEST_STATUS.md\",\n    \"services/postgres-init/migrations/tests/test_migration_health_checks.py\"\n  ],\n  \"scores\": [\n    1.0,\n    1.0,\n    1.0,\n    1.0\n  ]\n}",
+  "ground_truth": {
+    "relevant_chunks": [
+      "services/postgres-init/migrations/alembic/env.py",
+      "services/postgres-init/migrations/alembic/versions/4c0332be5c38_add_agent_prompts_system.py",
+      "services/timescaledb-service/migrations/alembic/versions/2025_01_22_comprehensive_hierarchical_schema.py"
+    ],
+    "relevance_scores": {
+      "services/postgres-init/migrations/alembic/env.py": 1.0,
+      "services/postgres-init/migrations/alembic/versions/4c0332be5c38_add_agent_prompts_system.py": 0.9,
+      "services/timescaledb-service/migrations/alembic/versions/2025_01_22_comprehensive_hierarchical_schema.py": 0.7
+    }
+  },
+  "metadata": {
+    "difficulty": "medium",
+    "domain": "database"
+  }
+}

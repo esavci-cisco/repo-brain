@@ -1,0 +1,56 @@
+{
+  "test_id": "search_008",
+  "scenario": "regular",
+  "timestamp": "2026-03-12T03:45:04.378086",
+  "test_type": "search",
+  "description": "Find data sanitization code",
+  "metrics": {
+    "retrieval": {
+      "precision@1": 0.0,
+      "precision@3": 0.0,
+      "precision@5": 0.0,
+      "recall@1": 0.0,
+      "recall@3": 0.0,
+      "recall@5": 0.0,
+      "mrr": 0.0,
+      "ndcg@3": 0.0,
+      "ndcg@5": 0.0,
+      "avg_score": 0.0
+    },
+    "task_completion": null,
+    "scope_analysis": null,
+    "code_understanding": null,
+    "sme_agents": null,
+    "performance": {
+      "latency": {
+        "p50_ms": 87.28909492492676,
+        "p95_ms": 0.0,
+        "p99_ms": 0.0
+      },
+      "tokens": {
+        "prompt": 0,
+        "completion": 0,
+        "total": 0,
+        "context": 0
+      },
+      "memory_mb": 0.0
+    }
+  },
+  "raw_output": "{\n  \"retrieved\": [],\n  \"scores\": []\n}",
+  "ground_truth": {
+    "relevant_chunks": [
+      "libraries/python/swarm-coordination/src/swarm_coordination/sanitize.py",
+      "services/swarm-node/app/src/swarm_node/main.py",
+      "services/swarm-node/app/src/agents/swarm/graph/swarm_graph.py"
+    ],
+    "relevance_scores": {
+      "libraries/python/swarm-coordination/src/swarm_coordination/sanitize.py": 1.0,
+      "services/swarm-node/app/src/swarm_node/main.py": 0.7,
+      "services/swarm-node/app/src/agents/swarm/graph/swarm_graph.py": 0.5
+    }
+  },
+  "metadata": {
+    "difficulty": "medium",
+    "domain": "security"
+  }
+}
