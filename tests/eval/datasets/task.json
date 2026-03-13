@@ -56,31 +56,28 @@
     {
       "id": "task_003",
       "type": "task",
-      "description": "Implement WebSocket connection pooling",
-      "task": "Add connection pooling to the swarm node WebSocket handler to support 1000+ concurrent connections",
+      "description": "Add health check endpoint",
+      "task": "Add a GET /health endpoint that returns service status and database connectivity",
       "ground_truth": {
         "required_files": [
-          "services/swarm-node/app/websocket_handler.py",
-          "services/swarm-node/app/connection_pool.py",
-          "services/swarm-node/app/config.py"
+          "services/rest-api/app/routers/health.py",
+          "services/rest-api/app/main.py"
         ],
         "expected_changes": [
-          "ConnectionPool class implementation",
-          "Pool size configuration",
-          "Connection lifecycle management",
-          "Metrics collection"
+          "Health check route handler",
+          "Database connectivity check",
+          "JSON response with status"
         ],
         "correctness_criteria": [
-          "Handles 1000+ concurrent connections",
-          "Properly closes idle connections",
-          "Reuses connections appropriately",
-          "No memory leaks"
+          "Endpoint returns 200 when healthy",
+          "Checks database connection",
+          "Returns proper JSON format"
         ]
       },
       "metadata": {
-        "difficulty": "hard",
-        "domain": "networking",
-        "estimated_time_minutes": 60
+        "difficulty": "easy",
+        "domain": "api",
+        "estimated_time_minutes": 10
       }
     },
     {
