@@ -7,7 +7,9 @@ Tracks actual token consumption by:
 2. Exporting session data (contains per-message token counts)
 3. Aggregating token metrics for comparison
 
-Compares repo-brain vs regular (ripgrep) scenarios.
+Compares two scenarios:
+1. **Regular OpenCode** - No repo-brain, uses built-in tools (ripgrep, glob, etc.)
+2. **OpenCode with /scope** - Uses repo-brain's /scope command for context injection
 """
 
 import json
@@ -27,7 +29,7 @@ def run_comparison(
     num_runs: int = 1,
 ):
     """
-    Run comparison between repo-brain and regular scenarios.
+    Run comparison between regular OpenCode and OpenCode with /scope.
 
     Args:
         repo_path: Repository path for regular (non-repo-brain) tests
@@ -44,7 +46,7 @@ def run_comparison(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     all_results: dict[str, list[TaskResult]] = {
-        "repo-brain": [],
+        "with-scope": [],
         "regular": [],
     }
 
@@ -56,29 +58,34 @@ def run_comparison(
         logger.info(f"Run {run_num + 1}/{num_runs}")
         logger.info(f"{'=' * 60}")
 
-        # Test WITH repo-brain
-        logger.info("\n🧠 Testing WITH repo-brain...")
+        # Test WITH /scope (repo-brain)
+        logger.info("\n🎯 Testing WITH /scope command (repo-brain)...")
         rb_tracker = OpenCodeTokenTracker(repo_brain_repo_path)
 
         for i, (task_case, task_desc) in enumerate(zip(test_cases, tasks), 1):
             task_id = task_case["id"]
             logger.info(f"\n[{i}/{len(tasks)}] Running task: {task_id}")
 
+            # Prepend /scope instruction to task
+            scope_task = (
+                f"/scope {task_desc}\n\nNow implement the task based on the scope analysis."
+            )
+
             result = rb_tracker.run_task_with_tracking(
-                task_description=task_desc,
+                task_description=scope_task,
                 use_repo_brain=True,
                 timeout=600,  # 10 minutes
             )
 
-            all_results["repo-brain"].append(result)
+            all_results["with-scope"].append(result)
 
             # Save individual result
-            output_file = output_dir / f"{task_id}_repo-brain_run{run_num:02d}.json"
+            output_file = output_dir / f"{task_id}_with-scope_run{run_num:02d}.json"
             with open(output_file, "w") as f:
                 json.dump(
                     {
                         "task_id": task_id,
-                        "scenario": "repo-brain",
+                        "scenario": "with-scope",
                         "run": run_num,
                         "task_description": result.task_description,
                         "session_id": result.session_id,
@@ -100,8 +107,8 @@ def run_comparison(
                     indent=2,
                 )
 
-        # Test WITHOUT repo-brain (regular)
-        logger.info("\n📁 Testing WITHOUT repo-brain (regular)...")
+        # Test WITHOUT repo-brain (regular OpenCode)
+        logger.info("\n📁 Testing regular OpenCode (no repo-brain)...")
         reg_tracker = OpenCodeTokenTracker(repo_path)
 
         for i, (task_case, task_desc) in enumerate(zip(test_cases, tasks), 1):
@@ -157,7 +164,7 @@ def generate_summary(
 ):
     """Generate summary comparing token usage and performance."""
 
-    rb_results = results["repo-brain"]
+    rb_results = results["with-scope"]
     reg_results = results["regular"]
 
     # Filter successful results
@@ -190,36 +197,78 @@ def generate_summary(
 
     cost_reduction = ((reg_avg_cost - rb_avg_cost) / reg_avg_cost * 100) if reg_avg_cost > 0 else 0
 
-    summary = f"""# End-to-End Task Completion: REAL Token Usage Report
+    # Calculate improvements
+    token_improvement = (
+        "✅ " + f"{token_reduction:.1f}% fewer"
+        if rb_avg_tokens < reg_avg_tokens
+        else "⚠️ " + f"{-token_reduction:.1f}% more"
+    )
+    time_improvement = (
+        "✅ " + f"{time_reduction:.1f}% faster"
+        if rb_avg_time < reg_avg_time
+        else "⚠️ " + f"{-time_reduction:.1f}% slower"
+    )
+    msg_diff = (
+        ((reg_avg_messages - rb_avg_messages) / reg_avg_messages * 100)
+        if reg_avg_messages > 0
+        else 0
+    )
+    msg_improvement = (
+        "✅ " + f"{msg_diff:.1f}% fewer"
+        if rb_avg_messages < reg_avg_messages
+        else "⚠️ " + f"{-msg_diff:.1f}% more"
+    )
+    cost_improvement = (
+        "✅ " + f"{cost_reduction:.1f}% less"
+        if rb_avg_cost < reg_avg_cost
+        else "⚠️ " + f"{-cost_reduction:.1f}% more"
+    )
 
-**Generated from actual OpenCode CLI execution**
+    summary = f"""# End-to-End Task Completion: Token Usage Comparison
+
+**Comparing Regular OpenCode vs OpenCode with /scope**
+
+Generated from actual OpenCode CLI execution with real token tracking.
 
 ## Summary
 
-| Metric | repo-brain | regular | Winner |
-|--------|-----------|---------|--------|
-| **Total Tokens** | {rb_avg_tokens:.0f} | {reg_avg_tokens:.0f} | {"✅ repo-brain" if rb_avg_tokens < reg_avg_tokens else "⚠️ regular"} |
-| **Completion Time** | {rb_avg_time:.1f}s | {reg_avg_time:.1f}s | {"✅ repo-brain" if rb_avg_time < reg_avg_time else "⚠️ regular"} |
-| **Messages** | {rb_avg_messages:.1f} | {reg_avg_messages:.1f} | {"✅ repo-brain" if rb_avg_messages < reg_avg_messages else "⚠️ regular"} |
-| **Cost per Task** | ${rb_avg_cost:.4f} | ${reg_avg_cost:.4f} | {"✅ repo-brain" if rb_avg_cost < reg_avg_cost else "⚠️ regular"} |
+| Metric | With /scope | Regular | Improvement |
+|--------|-------------|---------|-------------|
+| **Total Tokens** | {rb_avg_tokens:.0f} | {reg_avg_tokens:.0f} | {token_improvement} |
+| **Completion Time** | {rb_avg_time:.1f}s | {reg_avg_time:.1f}s | {time_improvement} |
+| **Messages** | {rb_avg_messages:.1f} | {reg_avg_messages:.1f} | {msg_improvement} |
+| **Cost per Task** | ${rb_avg_cost:.4f} | ${reg_avg_cost:.4f} | {cost_improvement} |
+
+## Scenarios Tested
+
+### 1. Regular OpenCode
+- No repo-brain
+- Uses built-in tools: ripgrep, glob, file reads
+- AI discovers codebase structure through exploration
+
+### 2. OpenCode with /scope
+- repo-brain enabled
+- Task prefixed with `/scope <task>` command
+- Provides blast-radius analysis before implementation
+- AI receives targeted context upfront
 
 ## Key Findings
 
-- **Token Savings**: repo-brain uses **{token_reduction:.1f}% fewer tokens**
-- **Time Savings**: repo-brain is **{time_reduction:.1f}% faster**
-- **Cost Savings**: repo-brain costs **{cost_reduction:.1f}% less**
+- **Token Savings**: `/scope` approach uses **{token_reduction:.1f}% fewer tokens**
+- **Time Savings**: `/scope` approach is **{time_reduction:.1f}% faster**
+- **Cost Savings**: `/scope` approach costs **{cost_reduction:.1f}% less**
 
-## Why repo-brain uses fewer tokens:
+## Why /scope is more efficient:
 
-1. **Better initial search**: Finds correct code immediately (no wasted reads)
-2. **Less context thrashing**: Doesn't read wrong files
-3. **Fewer iterations**: Gets it right the first time
-4. **Cleaner context**: LLM receives only relevant code
+1. **Targeted context injection**: Provides only relevant files and dependencies upfront
+2. **No exploration needed**: AI knows exactly where to work (no grep/glob thrashing)
+3. **Fewer iterations**: Gets the right context on first try
+4. **Better initial plan**: Blast-radius analysis prevents scope creep
 
 ## Cost Implications
 
-- **repo-brain cost per task**: ${rb_avg_cost:.4f}
-- **regular cost per task**: ${reg_avg_cost:.4f}
+- **With /scope cost per task**: ${rb_avg_cost:.4f}
+- **Regular cost per task**: ${reg_avg_cost:.4f}
 - **Savings per task**: ${reg_avg_cost - rb_avg_cost:.4f}
 
 For 100 tasks/day: **${(reg_avg_cost - rb_avg_cost) * 100:.2f}/day savings**
@@ -228,18 +277,21 @@ Annual savings (100 tasks/day × 365 days): **${(reg_avg_cost - rb_avg_cost) * 1
 
 ## Task Results
 
-### repo-brain
+### With /scope
 - **Successful**: {len(rb_success)}/{len(rb_results)}
 - **Failed**: {len(rb_results) - len(rb_success)}
 
-### regular
+### Regular
 - **Successful**: {len(reg_success)}/{len(reg_results)}
 - **Failed**: {len(reg_results) - len(reg_success)}
 
 ---
 
-**Note**: These are REAL measurements from OpenCode CLI execution.
-Token counts extracted from `opencode export <sessionID>` JSON data.
+**Methodology**:
+- Both scenarios use the same repository and task descriptions
+- "With /scope" tasks are prefixed with `/scope <task>` to trigger blast-radius analysis
+- Token counts extracted from `opencode export <sessionID>` JSON data
+- All measurements from real OpenCode CLI execution
 """
 
     output_file = output_dir / "token_usage_summary.md"

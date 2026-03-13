@@ -2,9 +2,13 @@
 #
 # Run end-to-end token comparison tests
 #
+# Compares two scenarios:
+# 1. Regular OpenCode - No repo-brain, uses built-in tools
+# 2. OpenCode with /scope - Uses repo-brain's /scope command for context injection
+#
 # Usage:
-#   ./run_e2e_tests.sh                    # Quick test (1 run, 3 tasks)
-#   ./run_e2e_tests.sh --runs 3           # Reliable test (3 runs, 3 tasks)
+#   ./run_e2e_tests.sh                    # Quick test (1 run, 2 tasks)
+#   ./run_e2e_tests.sh --runs 3           # Reliable test (3 runs, 2 tasks)
 #   ./run_e2e_tests.sh --help             # Show all options
 
 set -e
@@ -21,7 +25,8 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 echo -e "${BLUE}=======================================${NC}"
-echo -e "${BLUE}  E2E Token Usage Comparison Test${NC}"
+echo -e "${BLUE}  E2E Token Usage Comparison${NC}"
+echo -e "${BLUE}  Regular vs /scope approach${NC}"
 echo -e "${BLUE}=======================================${NC}"
 echo ""
 
@@ -78,14 +83,15 @@ echo -e "${GREEN}Configuration:${NC}"
 echo "  Repository:  $REPO_PATH"
 echo "  Output:      $OUTPUT_DIR"
 echo "  Runs:        $RUNS"
-echo "  Tasks:       3 (first 3 from task.json)"
-echo "  Total tests: $(( 3 * 2 * RUNS )) (3 tasks × 2 scenarios × $RUNS runs)"
+echo "  Tasks:       2 (from task.json)"
+echo "  Scenarios:   2 (regular + /scope)"
+echo "  Total tests: $(( 2 * 2 * RUNS )) (2 tasks × 2 scenarios × $RUNS runs)"
 echo ""
 
 # Estimate time
-TOTAL_TESTS=$(( 3 * 2 * RUNS ))
+TOTAL_TESTS=$(( 2 * 2 * RUNS ))
 MIN_TIME=$(( TOTAL_TESTS * 1 ))
-MAX_TIME=$(( TOTAL_TESTS * 2 ))
+MAX_TIME=$(( TOTAL_TESTS * 3 ))
 
 echo -e "${YELLOW}⏱️  Estimated time: $MIN_TIME-$MAX_TIME minutes${NC}"
 echo ""

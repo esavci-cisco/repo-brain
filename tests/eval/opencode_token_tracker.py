@@ -6,6 +6,10 @@ Tracks token usage during real OpenCode task execution by:
 2. Exporting session data (contains per-message token counts)
 3. Aggregating token metrics for comparison
 
+Compares two scenarios:
+- Regular OpenCode (no repo-brain, uses built-in tools)
+- OpenCode with /scope (repo-brain's on-demand context injection)
+
 Uses OpenCode CLI commands:
 - `opencode run` - Execute tasks
 - `opencode session list` - Get session IDs
@@ -95,8 +99,10 @@ class OpenCodeTokenTracker:
         Run an OpenCode task and track token usage.
 
         Args:
-            task_description: Task to execute (e.g., "Add user profile endpoint")
-            use_repo_brain: Whether to use repo-brain (True) or disable it (False)
+            task_description: Task to execute.
+                For repo-brain tests, should start with "/scope <task>"
+                For regular tests, just the task description
+            use_repo_brain: Whether repo-brain is enabled (affects which repo is used)
             timeout: Maximum execution time in seconds
 
         Returns:
@@ -210,16 +216,18 @@ class OpenCodeTokenTracker:
 
         Args:
             task_description: Task to execute
-            use_repo_brain: Whether to enable repo-brain
+            use_repo_brain: Whether repo-brain is enabled in the target repository
+                (Note: This is informational only - the tracker uses different repos
+                for with/without repo-brain tests)
             timeout: Maximum execution time in seconds
 
         Returns:
             CompletedProcess result
         """
-        # Note: OpenCode CLI may not have a direct flag to disable repo-brain
-        # If repo-brain instructions are in opencode.json, they'll be used
-        # For testing, we might need to temporarily modify opencode.json
-        # or use different repo directories
+        # Note: The use_repo_brain flag doesn't affect the command itself.
+        # Instead, we use different repository directories:
+        # - Regular repo: No .opencode/commands/scope.md or repo-brain setup
+        # - Repo-brain repo: Has repo-brain configured with /scope and /q commands
 
         cmd = [
             str(self.opencode_bin),
@@ -405,10 +413,11 @@ class OpenCodeTokenTracker:
         runs_per_task: int = 3,
     ) -> dict[str, Any]:
         """
-        Compare token usage between repo-brain and regular approaches.
+        Compare token usage between /scope approach and regular OpenCode.
 
         Args:
             tasks: List of task descriptions to test
+                For repo-brain tests, prepend "/scope " to trigger blast-radius analysis
             runs_per_task: Number of runs per task for averaging
 
         Returns:
