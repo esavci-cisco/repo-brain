@@ -206,7 +206,7 @@ repo-brain/
 | `.opencode/commands/scope.md` | `/scope` custom command | No (gitignored) |
 | `.opencode/commands/summarize.md` | `/summarize` custom command | No (gitignored) |
 | `.opencode/plugins/repo-brain.ts` | Session-start map refresh plugin | No (gitignored) |
-| `opencode.json` (patched) | Adds repomap.md and architecture.md to instructions | Yes |
+| `opencode.json` (patched) | Adds architecture.md to instructions | Yes |
 
 Data stored at `~/.repo-brain/repos/<slug>/`:
 
@@ -219,8 +219,8 @@ Data stored at `~/.repo-brain/repos/<slug>/`:
 
 ## Key Design Decisions
 
-- **Push, not pull** — context is injected deterministically, not dependent on LLM tool selection
-- **Repo map in system prompt** — LLM always has structural awareness of the codebase
+- **Pull, not push** — context is provided on-demand via commands (`/scope`, `/q`), not auto-loaded in every message
+- **Repo map for commands** — Used by `/q` and `/scope` for targeted context injection, not loaded in system prompt
 - **Architectural summary** — LLM-generated once via `/summarize`, loaded automatically on every session. Zero ongoing token cost.
 - **Session-start refresh** — plugin refreshes repo map on `session.created` so it stays current
 - **Zero infrastructure** — no Docker, no external services, everything runs locally
