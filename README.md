@@ -80,7 +80,34 @@ query time, keeping latency under 2 seconds.
 3. **Generate map** — Tree-sitter extracts structural info → `.repo-brain/repomap.md`
 4. **Generate OpenCode integration** — writes commands and plugin
 
-After setup, open OpenCode in the repo and use `/scope <task>` before implementing for best results.
+## Daily Usage
+
+Once setup is complete, here's how to use repo-brain in your everyday workflow:
+
+1. **Open OpenCode** in your repo directory:
+   ```bash
+   cd /path/to/your/repo
+   opencode
+   ```
+
+2. **Start every task with `/scope`** for best results:
+   ```
+   /scope Add user authentication endpoint
+   /scope Fix memory leak in WebSocket handler
+   /scope Refactor payment processing module
+   ```
+   This gives the AI targeted context about affected files, services, and dependencies.
+
+3. **Use `/q` during implementation** for targeted code lookups:
+   ```
+   /q authentication middleware
+   /q error handling patterns
+   /q database connection pooling
+   ```
+
+4. **That's it!** The plugin auto-refreshes the repo map on each session start, so context stays current.
+
+**Key insight:** Always use `/scope` first before implementing. This simple habit delivers 48% faster completion and 66% fewer tokens.
 
 ## Best Practices 🏆
 
