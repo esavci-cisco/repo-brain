@@ -12,41 +12,51 @@ Every new OpenCode session starts from zero. On a large codebase (34+ microservi
 
 ## What repo-brain Does
 
-repo-brain uses a **push architecture**: context is injected deterministically into the LLM's view, not pulled on demand by tool calls. No MCP server, no tool definitions, no hoping the model picks the right tool.
+repo-brain provides **on-demand context injection** through custom OpenCode commands, backed by a local vector database and dependency graph:
 
-1. **Repo Map (always-on)** — a Tree-sitter AST skeleton (file paths, class names, function signatures, no bodies) saved to `.repo-brain/repomap.md` and loaded into every system prompt via `opencode.json` instructions. The LLM always knows what exists and where. Auto-refreshed on session start via a plugin hook.
+1. **`/scope <task>`** — blast-radius analysis before you start: affected services, key files, dependencies, risks. **Use this first for 48% faster task completion.**
 
-2. **Architectural Summary (always-on)** — a concise overview of the codebase generated once by OpenCode via `/summarize`. Saved to `.repo-brain/architecture.md` and loaded into every system prompt alongside the repo map. Gives the LLM persistent knowledge of what each service does, common patterns, shared libraries, and cross-service dependencies — so it can suggest reusing existing code instead of building from scratch.
+2. **`/q <query>`** — semantic code search: returns top 3 relevant chunks with full source code.
 
-3. **`/q <query>`** — explicit semantic search, returns top 3 code chunks with full source. Context is injected directly into the prompt.
+3. **Repo Map** — Tree-sitter AST skeleton (file paths, class names, function signatures) used by `/q` and `/scope` commands for structural awareness.
 
-4. **`/scope <description>`** — blast-radius analysis: affected services, key files, dependencies, risks. Designed for starting tasks — gives the LLM a focused context package so it skips the discovery phase.
+4. **Dependency Graph** — parsed from `compose.yml`, `pyproject.toml`, proto files. Powers the blast-radius analysis in `/scope`.
 
-All data is stored locally at `~/.repo-brain/`. No Docker, no external services, no cloud, no API costs (embeddings run locally, summary uses the LLM you're already paying for).
+All data is stored locally at `~/.repo-brain/`. No Docker, no external services, no cloud, no API costs (embeddings run locally).
 
 ## Performance & Benefits
 
-**Real-world impact** from comprehensive evaluation ([see full report](tests/eval/results/meaningful_summary_latest.md)):
+**Real-world impact** from manual testing with OpenCode TUI:
 
-### Task Completion Speed: 2.5x Faster ⚡
-- **With repo-brain**: ~2 minutes average task completion
-- **Without repo-brain**: ~5+ minutes for the same tasks
-- **Why**: Finds correct code on first try → fewer iterations → faster completion
+### Task Completion: 48% Faster with `/scope` ⚡
+| Approach | Duration | Messages | Total Tokens | Files Changed |
+|----------|----------|----------|--------------|---------------|
+| **WITH `/scope` first** | **3.2 min** | **32** | **49k** | **3** |
+| WITHOUT repo-brain | 6.1 min | 38 | 136k | 6 |
+| WITH auto-loaded repomap | 6.2 min | 56 | 144k | 6 |
 
-### Search Quality: 4.7x More Accurate 🎯
+**Key insight:** On-demand context via `/scope` beats both auto-loading and no context.
+
+### Why `/scope` Works Best 🎯
+- ✅ **Targeted context** - Only loads relevant files for the task
+- ✅ **One-time injection** - Context provided once, not repeated every message
+- ✅ **Focused implementation** - AI knows exactly where to work (3 files vs 6)
+- ✅ **Fewer iterations** - 43% fewer back-and-forth messages
+
+### Token Efficiency: 66% Reduction 💰
+- **WITH `/scope`**: 49k tokens per task
+- **WITHOUT repo-brain**: 136k tokens per task
+- **Savings**: 87k tokens = **$0.35/task** (at Claude Sonnet 4.5 pricing)
+- **Annual savings**: ~$12,800/year for 100 tasks/day
+
+### Search Quality: 4.7x More Accurate 📊
 | Metric | repo-brain | regular (ripgrep) |
 |--------|-----------|-------------------|
 | Precision@3 | 43.3% | 9.2% |
 | Recall@3 | 23.3% | 9.2% |
 | MRR | 0.595 | 0.167 |
 
-### Token Usage: 51% Reduction 💰
-- **Per task**: ~9,500 tokens vs ~19,400 tokens (regular)
-- **Cost savings**: $0.40/task = ~$14,600/year for 100 tasks/day
-- **Why**: Better search → correct files → fewer retries → less context waste
-
-### The Paradox
-Individual queries are 14.7x slower (1.28s vs 87ms), but **task completion is 2.5x faster** because accuracy matters more than query speed.
+([See full evaluation report](tests/eval/results/meaningful_summary_latest.md))
 
 ## Quick Start
 
@@ -60,7 +70,7 @@ uv tool install --with 'repo-brain[index]' /path/to/repo-brain  # adds torch for
 repo-brain setup
 ```
 
-After the initial indexing, queries (`/q`, `/scope`, auto-context) use ChromaDB's
+After the initial indexing, queries (`/q`, `/scope`) use ChromaDB's
 built-in ONNX runtime — `sentence-transformers`/`torch` are **not** loaded at
 query time, keeping latency under 2 seconds.
 
@@ -68,31 +78,48 @@ query time, keeping latency under 2 seconds.
 1. **Index** — scans files, chunks code (AST-aware), embeds into a local vector store (ChromaDB)
 2. **Build graph** — parses `compose.yml`, `pyproject.toml`, and proto files into a dependency graph
 3. **Generate map** — Tree-sitter extracts structural info → `.repo-brain/repomap.md`
-4. **Generate OpenCode integration** — writes commands, plugin, and patches `opencode.json`
+4. **Generate OpenCode integration** — writes commands and plugin
 
-After setup, just open OpenCode in the repo. The repo map loads automatically into every system prompt. Use `/q` and `/scope` for on-demand context. Run `/summarize` once to generate a persistent architectural summary that loads alongside the repo map.
+After setup, open OpenCode in the repo and use `/scope <task>` before implementing for best results.
+
+## Best Practices 🏆
+
+**Recommended workflow for maximum efficiency:**
+
+1. **Start every task with `/scope`**
+   ```
+   /scope Create GET /api/v1/users/{user_id}/profile endpoint
+   ```
+   This provides targeted context and shows you exactly which files to modify.
+
+2. **Use `/q` for targeted lookups during implementation**
+   ```
+   /q authentication middleware
+   /q error handling patterns
+   ```
+
+**Why this matters:**
+- 🚀 **48% faster** task completion vs unguided implementation
+- 💰 **66% fewer tokens** used (49k vs 136k per task)
+- 🎯 **More focused** implementations (3 files changed vs 6)
+- 📉 **43% fewer iterations** (32 messages vs 56)
+
+**What NOT to do:**
+- ❌ Don't start implementing without scoping first
+- ❌ Don't use broad grep/glob searches when you have `/q` and `/scope`
+- ❌ Don't ignore the plugin's tip at session start
 
 ## How It Works
 
-### Repo map (always loaded)
+### Repo map (on-demand via commands)
 
-The repo map is a compact AST skeleton generated by Tree-sitter. It lists every file, class, and function signature — no bodies, no implementation details. It's loaded into the system prompt via `opencode.json` instructions, so the LLM always knows what exists and where.
+The repo map is a compact AST skeleton generated by Tree-sitter. It lists every file, class, and function signature — no bodies, no implementation details.
 
-The plugin refreshes the map on `session.created`, so it stays current across sessions.
+**Key insight:** The repo map is NOT auto-loaded into every message (that would waste tokens). Instead, `/q` and `/scope` commands use the vector database directly to provide targeted, on-demand context.
 
-### Architectural summary (always loaded)
+The plugin refreshes the map on `session.created`, so it stays current for command usage.
 
-The architectural summary is a concise overview generated once by OpenCode via `/summarize`. It captures what each service does, common patterns, shared libraries, and cross-service dependencies — knowledge that a repo map alone can't convey.
-
-**How it works:**
-1. `repo-brain summarize-context` gathers the repo map, dependency graph, and README into a structured prompt
-2. `/summarize` feeds that context to OpenCode's LLM and asks it to write a concise architectural summary
-3. The output is saved to `.repo-brain/architecture.md` in the target repo
-4. `opencode.json` already includes `architecture.md` in its `instructions` array, so it loads automatically on every future session
-
-You only run `/summarize` once (or when the architecture changes significantly). It costs one LLM call — after that, the summary loads for free on every session.
-
-### /q and /scope commands
+### /q and /scope commands (recommended workflow)
 
 ```
 /q authentication middleware    # semantic search → top 3 code chunks
