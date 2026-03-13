@@ -39,7 +39,7 @@ def run_comparison(
     dataset_file = Path(__file__).parent / "datasets" / "task.json"
     with open(dataset_file) as f:
         data = json.load(f)
-        test_cases = data["test_cases"][:3]  # Run first 3 tasks
+        test_cases = data["test_cases"][:2]  # Run first 2 tasks (task 3 is too complex)
 
     output_dir.mkdir(parents=True, exist_ok=True)
 

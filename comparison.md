@@ -48,14 +48,13 @@
 ## repo-brain
 
 **How it works:**
-- **Push architecture**: Context injected deterministically into every session
-- Always-on components:
-  - **Repo map** (`.repo-brain/repomap.md`): AST skeleton loaded into every system prompt
-  - **Architectural summary** (`.repo-brain/architecture.md`): LLM-generated overview of codebase architecture
-- On-demand commands:
-  - `/q <query>`: Semantic code search (top 3 chunks)
-  - `/scope <description>`: Blast-radius analysis for task planning
-  - `/summarize`: Generate architectural summary (run once)
+- **On-demand context injection** through custom commands
+- Backed by local vector database and dependency graph
+- Key commands:
+  - **`/scope <task>`**: Blast-radius analysis - affected services, key files, risks (use this FIRST)
+  - **`/q <query>`**: Semantic code search - returns top 3 relevant chunks
+  - **`/summarize`**: Generate architectural summary (optional)
+- Auto-refreshing repo map used internally by commands
 
 **Strengths:**
 - **Persistent structural memory** across all sessions

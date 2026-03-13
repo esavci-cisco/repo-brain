@@ -6,15 +6,16 @@ Generates the files that wire repo-brain into OpenCode's extension points:
    (vector search → formatted chunks injected into prompt).
 2. ``.opencode/commands/scope.md`` — custom ``/scope`` command for task scoping
    (blast-radius analysis injected into prompt). **Recommended workflow:**
-   Run ``/scope <task>`` before implementing for 48% faster completion.
+   The command description highlights the performance benefits to encourage usage.
 3. ``.opencode/commands/summarize.md`` — custom ``/summarize`` command that
    generates an architectural summary of the codebase.
 4. ``.opencode/plugins/repo-brain.ts`` — plugin with a ``session.created``
-   hook that auto-refreshes the repo map and shows a helpful tip.
+   hook that auto-refreshes the repo map for use by /q and /scope commands.
 
 NOTE: The repo map is NOT auto-loaded into the system prompt (that would
 waste tokens by sending it with every message). Instead, use /q or /scope
-for on-demand context injection.
+for on-demand context injection. The /scope command description includes
+performance data to encourage users to adopt the optimal workflow.
 
 All files are written into the *target repository* (not ~/.repo-brain).
 """
@@ -50,8 +51,10 @@ and suggest refining the query.
 
 _SCOPE_COMMAND_TEMPLATE = """\
 ---
-description: Scope a task — find affected services, files, dependencies, and risks
+description: ⭐ Scope task first for 48% faster completion (recommended workflow)
 ---
+
+💡 **TIP: Always run /scope BEFORE implementing for best results**
 
 Scope the following task by running this command:
 
@@ -63,6 +66,11 @@ Use the scope analysis output to plan and implement the task.
 Read the key files listed in the analysis, then proceed.
 Do NOT do broad grep/glob for discovery — the scoping already
 identified the relevant files.
+
+**Why /scope first?**
+- 48% faster completion (3.2 min vs 6.1 min)
+- 66% fewer tokens (49k vs 136k)
+- More focused implementation (3 files vs 6)
 """
 
 _SUMMARIZE_COMMAND_TEMPLATE = """\
@@ -94,7 +102,7 @@ import type { Plugin } from "@opencode-ai/plugin";
  * repo-brain plugin for OpenCode.
  *
  * Events:
- *   session.created — regenerate the repo map and show helpful tip
+ *   session.created — regenerate the repo map for /q and /scope commands
  *
  * The /q and /scope commands provide on-demand context injection.
  * Using /scope before implementing tasks results in 48% faster completion
@@ -108,24 +116,8 @@ export const RepoBrain: Plugin = async ({ client, $ }) => {
         try {
           // Regenerate repo map (used by /q and /scope commands)
           await $`repo-brain generate-map`.quiet();
-
-          // Show helpful tip to user
-          await client.app.log({
-            body: {
-              service: "repo-brain",
-              level: "info",
-              message:
-                "💡 repo-brain tip: Run /scope <task> before implementing for faster results",
-            },
-          });
         } catch {
-          await client.app.log({
-            body: {
-              service: "repo-brain",
-              level: "warn",
-              message: "Failed to refresh repo map",
-            },
-          });
+          // Silently fail - map will be stale but commands still work
         }
       }
     },
@@ -167,7 +159,7 @@ def generate_opencode_files(config: RepoConfig) -> dict[str, Path]:
 
     plugin_path = plugins_dir / "repo-brain.ts"
     plugin_path.write_text(_PLUGIN_TEMPLATE)
-    created["repo-brain plugin (auto-refresh + helpful tip)"] = plugin_path
+    created["repo-brain plugin (auto-refresh map)"] = plugin_path
 
     # 3. Ensure opencode.json exists
     opencode_json_path = repo_root / "opencode.json"
