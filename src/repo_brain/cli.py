@@ -329,9 +329,17 @@ def generate_map(repo: str | None) -> None:
         raise SystemExit(1)
 
     from repo_brain.generators.repomap import save_repo_map
+    from repo_brain.storage.graph_store import GraphStore
+
+    # Load graph for service-aware ranking
+    graph_store = None
+    try:
+        graph_store = GraphStore(config)
+    except Exception:
+        pass  # Graph optional
 
     click.echo(f"Generating repo map for: {config.name}")
-    output_path = save_repo_map(config)
+    output_path = save_repo_map(config, graph_store=graph_store)
     click.echo(f"  Wrote: {output_path}")
 
 

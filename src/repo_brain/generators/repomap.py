@@ -614,8 +614,8 @@ def _rank_and_filter(
 ) -> list[FileSymbols]:
     """Filter out low-value files, rank the rest by importance.
 
-    Applies a directory diversity cap so no single top-level directory
-    (e.g. ``mcp_servers/``, ``services/``) dominates the output.
+    NEW STRATEGY: Ensure every service from the dependency graph gets at least
+    one key file, then fill remaining budget with highest-ranked files.
 
     Returns filtered and sorted list (most important first).
     """
@@ -627,15 +627,55 @@ def _rank_and_filter(
             continue
         filtered.append(fs)
 
-    # Compute scores and sort
+    # Compute scores for all files
     scored = [(fs, _compute_file_score(fs, graph_store)) for fs in filtered]
     scored.sort(key=lambda x: x[1], reverse=True)
 
-    # Apply directory diversity cap: at most N files per grouping directory.
-    # For monorepo-style directories that are known containers (services/,
-    # mcp_servers/, libraries/, etc.), group by the *second* level so each
-    # sub-service gets its own budget.  For other top-level dirs, group by
-    # the first level.
+    # PHASE 1: Ensure service coverage from dependency graph
+    # Get all services from graph and find their best file
+    service_files: list[FileSymbols] = []
+    covered_services: set[str] = set()
+
+    if graph_store is not None:
+        try:
+            # Get all service nodes from graph
+            for node_info in graph_store.get_all_nodes():
+                if node_info.get("node_type") != "service":
+                    continue
+
+                service_path = node_info.get("path", "")
+                service_name = node_info.get("name", "")
+
+                if not service_path or service_name in covered_services:
+                    continue
+
+                # Find best matching file for this service
+                # Priority: main.py > server.py > __init__.py > config.py
+                candidates = []
+                for fs, score in scored:
+                    if service_path in fs.rel_path and fs not in service_files:
+                        # Boost score for key entry point files
+                        bonus = 0
+                        if "main.py" in fs.rel_path:
+                            bonus = 100
+                        elif "server.py" in fs.rel_path:
+                            bonus = 90
+                        elif "__init__.py" in fs.rel_path:
+                            bonus = 80
+                        elif "config.py" in fs.rel_path:
+                            bonus = 70
+                        candidates.append((fs, score + bonus))
+
+                if candidates:
+                    # Take the best file for this service
+                    candidates.sort(key=lambda x: x[1], reverse=True)
+                    service_files.append(candidates[0][0])
+                    covered_services.add(service_name)
+        except Exception as e:
+            logger.warning("Could not extract services from graph: %s", e)
+
+    # PHASE 2: Fill remaining budget with highest-ranked files
+    # Apply directory diversity cap for non-service files
     monorepo_containers = {
         "services",
         "mcp_servers",
@@ -646,8 +686,13 @@ def _rank_and_filter(
         "agents",
     }
     top_dir_counts: dict[str, int] = {}
-    diverse: list[FileSymbols] = []
+    additional_files: list[FileSymbols] = []
+
     for fs, _score in scored:
+        # Skip if already included as service file
+        if fs in service_files:
+            continue
+
         parts = fs.rel_path.replace("\\", "/").split("/")
         if len(parts) > 2 and parts[0].lower() in monorepo_containers:
             group_key = f"{parts[0]}/{parts[1]}"
@@ -655,13 +700,24 @@ def _rank_and_filter(
             group_key = parts[0]
         else:
             group_key = "__root__"
+
         count = top_dir_counts.get(group_key, 0)
         if count >= _MAX_FILES_PER_TOP_DIR:
             continue
         top_dir_counts[group_key] = count + 1
-        diverse.append(fs)
+        additional_files.append(fs)
 
-    return diverse
+    # Combine: service files first (guaranteed coverage), then additional files
+    result = service_files + additional_files
+
+    logger.info(
+        "Repo map coverage: %d service files + %d additional files = %d total",
+        len(service_files),
+        len(additional_files),
+        len(result),
+    )
+
+    return result
 
 
 # ── Formatting ───────────────────────────────────────────────────────
