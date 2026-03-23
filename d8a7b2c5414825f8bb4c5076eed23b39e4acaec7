@@ -1,0 +1,38 @@
+src/repo_brain/tools/scope.py
+  06152ecf5e009144 157-208,210
+CONTEXT_PARADOX.md
+  06152ecf5e009144 1-545
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "d8a7b2c5414825f8bb4c5076eed23b39e4acaec7",
+  "prompts": {
+    "06152ecf5e009144": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2e4b71243ffeZFEBxtUZZMCP3n",
+        "model": "github-copilot/claude-sonnet-4.5"
+      },
+      "human_author": "esavci <esavci+github@cisco.com>",
+      "messages": [],
+      "total_additions": 625,
+      "total_deletions": 29,
+      "accepted_lines": 598,
+      "overriden_lines": 0
+    },
+    "c29d9f8ea2f021a6": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2e8183d93ffeab4xs3kL88TYA6",
+        "model": "github-copilot/claude-sonnet-4.5"
+      },
+      "human_author": "esavci <esavci+github@cisco.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 31,
+      "overriden_lines": 0
+    }
+  }
+}
