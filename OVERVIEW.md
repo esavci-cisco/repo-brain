@@ -72,19 +72,145 @@ But "if you change this, these 12 services will break"
 
 **What it stores**: Tree-sitter AST skeleton (file paths, class/function signatures) — gives structural overview without full code
 
+## Command Flows
+
+### `/scope <task>` Flow
+
+```
+User: /scope add filtering to rule agent context
+  │
+  ├─► Step 0: Task Intelligence Analysis
+  │   ├─► Git History Analyzer
+  │   │   └─► Analyzes last 50 commits for similar keywords
+  │   │       └─► Output: "5 similar tasks modified ~2.4 files, ~180 lines"
+  │   │
+  │   ├─► Pattern Detector
+  │   │   └─► Vector search for similar code patterns
+  │   │       └─► Output: "No filtering logic found → inline solution"
+  │   │
+  │   └─► Complexity Estimator
+  │       └─► Based on git history data
+  │           └─► Output: "LOW complexity"
+  │
+  ├─► Step 1: Semantic Search (Vector DB)
+  │   └─► Query: "add filtering to rule agent context"
+  │       └─► Returns top 20 relevant code chunks with metadata
+  │
+  ├─► Step 2: Extract Affected Services
+  │   └─► Groups results by service name (from file paths)
+  │       └─► Ranks by hit count
+  │           └─► Output: ["rule-agent": 5 hits, "context-manager": 2 hits]
+  │
+  ├─► Step 3: Get Graph Context (Dependency Graph)
+  │   └─► For each affected service:
+  │       ├─► get_upstream(depth=2) → What it depends on
+  │       └─► get_downstream(depth=2) → What depends on it
+  │           └─► Output: Dependencies + dependents for each service
+  │
+  ├─► Step 4: Build Key Files List
+  │   └─► Deduplicate and rank files from search results
+  │       └─► Output: Top 12 files with line numbers + symbols
+  │
+  ├─► Step 5: Risk Assessment
+  │   └─► Count downstream dependents per service
+  │       └─► HIGH RISK: >10 dependents
+  │       └─► MODERATE RISK: >3 dependents
+  │       └─► Output: Risk warnings for each service
+  │
+  ├─► Step 6: Suggested Reading Order
+  │   └─► Rank files by: service priority + search relevance
+  │       └─► Output: Ordered list of files to read
+  │
+  └─► Step 7: Format Output
+      └─► Markdown with sections:
+          ├─► Task Intelligence (NEW!)
+          │   ├─► Complexity estimate
+          │   ├─► Historical pattern
+          │   ├─► Code patterns detected
+          │   └─► Recommendation
+          ├─► Affected Services (with deps)
+          ├─► Key Files
+          ├─► Risk Assessment
+          ├─► Implementation Note (guidance)
+          └─► Next Steps
+
+OpenCode receives formatted output → Injects into LLM context
+```
+
+### `/q <query>` Flow
+
+```
+User: /q how is authentication handled
+  │
+  ├─► Step 1: Semantic Search (Vector DB)
+  │   └─► Embed query using sentence-transformers
+  │       └─► Query ChromaDB for similar vectors
+  │           └─► Returns top 3 most similar code chunks
+  │
+  ├─► Step 2: Format Results
+  │   └─► For each result:
+  │       ├─► Extract metadata (file, line, symbol)
+  │       ├─► Get code snippet
+  │       └─► Format as markdown code block
+  │
+  └─► Step 3: Return Output
+      └─► Markdown with 3 code snippets:
+          
+          ```
+          ## Code Search Results
+          
+          ### services/auth/main.py:45-67
+          **Symbol**: authenticate_user
+          
+          ```python
+          def authenticate_user(username: str, password: str) -> User:
+              # ... actual code from file ...
+          ```
+          
+          [... 2 more results ...]
+          ```
+
+OpenCode receives output → Injects into LLM context
+```
+
+### `/summarize` Flow
+
+```
+User: /summarize
+  │
+  ├─► Step 1: Gather Context
+  │   ├─► Read repomap.md
+  │   ├─► Load dependency graph (graph.json)
+  │   └─► Read README.md (if exists)
+  │
+  ├─► Step 2: Format for LLM
+  │   └─► Combine all sources into structured markdown:
+  │       ├─► Repo structure (from repomap)
+  │       ├─► Service dependencies (from graph)
+  │       └─► Project overview (from README)
+  │
+  ├─► Step 3: Send to LLM
+  │   └─► Prompt: "Write an architecture summary based on this context"
+  │       └─► LLM generates architecture.md
+  │
+  └─► Step 4: Save & Configure
+      ├─► Write to .repo-brain/architecture.md
+      └─► Update opencode.json to auto-load this file
+          └─► Now architecture.md loads on every OpenCode session
+
+OpenCode auto-loads architecture.md on session start
+```
+
 ## Commands
 
 ### `/scope <task>` (Use This First)
-1. Vector search finds relevant code
-2. Extracts affected services from results
-3. Graph queries show upstream/downstream dependencies
-4. Outputs blast-radius analysis with risk assessment
+Blast-radius analysis with automatic intelligence. Tells you what will break and how complex the task is.
 
 ### `/q <query>`
-Pure vector search — returns top 3 code snippets matching your query
+Semantic code search. Returns top 3 code snippets matching your query.
 
 ### `/summarize`
-Combines repomap + graph + README → LLM writes `architecture.md`
+One-time command. Generates `architecture.md` that auto-loads on every session.
 
 ## Known Issues
 
