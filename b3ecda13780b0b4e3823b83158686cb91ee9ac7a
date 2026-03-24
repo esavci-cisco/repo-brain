@@ -1,0 +1,27 @@
+src/repo_brain/analysis/pattern_detector.py
+  99e96e541e92f5c1 1-207
+src/repo_brain/analysis/git_history.py
+  99e96e541e92f5c1 1-4,6-214,216,218,220-234,236,238-262
+src/repo_brain/tools/scope.py
+  99e96e541e92f5c1 19-20,56,59-61,119-155,224-329
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "b3ecda13780b0b4e3823b83158686cb91ee9ac7a",
+  "prompts": {
+    "99e96e541e92f5c1": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2dfa96a96ffeGAF86C40OHS798",
+        "model": "github-copilot/claude-sonnet-4.5"
+      },
+      "human_author": "esavci <esavci+github@cisco.com>",
+      "messages": [],
+      "total_additions": 621,
+      "total_deletions": 2,
+      "accepted_lines": 613,
+      "overriden_lines": 5
+    }
+  }
+}
