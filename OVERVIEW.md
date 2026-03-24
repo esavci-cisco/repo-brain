@@ -142,64 +142,74 @@ OpenCode auto-loads architecture.md on every session start
 ### `/scope <task>` (Use This First)
 Blast-radius analysis with automatic intelligence. Tells you what will break and how complex the task is.
 
-**Example 1:**
-```markdown
-$ repo-brain scope "add health check endpoint"
-
-### Task Intelligence
-**Estimated Complexity**: HIGH
-**Historical Pattern**: 9 similar tasks - median 6 files, 1409 lines
-  - Range: 4-17 files, 17-2819 lines
-**Code Pattern**: 17 service implementations exist
-
-**Recommendation**: Median 6 files, 1409 lines (range 4-17) - plan carefully, test thoroughly
-
-### Affected Services
-- **monitoring-service** (6 matches) — FAA Monitoring Service
-- **rest-api** (4 matches) — REST API service
-```
-
-**Example 2:**
+**Full Example Output:**
 ```markdown
 $ repo-brain scope "add an endpoint to export devices in a topology"
 
+## Task Scope Analysis
+
+**Task**: add an endpoint to export devices in a topology
+
 ### Task Intelligence
+
 **Estimated Complexity**: HIGH
 **Historical Pattern**: 10 similar tasks - median 6 files, 1409 lines
   - Range: 3-17 files, 17-2819 lines
-**Code Pattern**: 9 service implementations exist
+**Code Pattern**: 9 service implementation(s) exist
+  - Examples: services/rest-api/.../main.py, services/rest-api/.../job_translator_service.py
 
-**Recommendation**: Median 6 files, 1409 lines (range 3-17) - plan carefully, test thoroughly
-
-### Affected Services
-- **rest-api** (7 matches) — REST API service
-- **tac** (2 matches) — TAC Service
-```
-
-**Example 3:**
-```markdown
-$ repo-brain scope "create token reduction system across multiple services"
-
-### Task Intelligence
-**Estimated Complexity**: MEDIUM
-**Historical Pattern**: 4 similar tasks - median 6 files, 819 lines
-  - Range: 3-17 files, 190-1409 lines
-**Code Pattern**: 8 library implementations exist
-
-**Recommendation**: Median 6 files, 819 lines (range 3-17) - consider modular approach
+**Recommendation**: Historical: Median 6 files, 1409 lines (range: 3-17 files, 17-2819 lines); 
+Pattern: 9 service implementations exist; Complexity: HIGH - plan carefully, test thoroughly
 
 ### Affected Services
-- **python** (8 matches)
-- **docs** (4 matches) — Documentation hosting service
+- **rest-api** (7 matches) — REST API service (deps: postgres, neo4j, chromadb; used by: platform-mcp, playwright)
+- **tac** (2 matches) — TAC Service (deps: llm-adapter, service-client)
+- **platform-mcp** (1 matches) — Platform MCP Server (deps: swarm-node, rest-api)
+
+### Key Files
+- `services/rest-api/app/src/rest_api/services/job_translator_service.py` — build_topology
+- `services/rest-api/app/src/rest_api/test_plan_report/ai_test_plan.py` — _extract_devices_from_topologies
+- `libraries/python/faa-models/src/faa_models/entities/device/device.py` — _generate_base_path
+- `services/rest-api/app/src/rest_api/main.py` — _is_device_endpoint
+- `libraries/python/schemas/src/schemas/api/device.py` — TopologyDevicesResponse
+- `services/tac/app/src/tac/routers/topologies.py` — TopologyListItem
+[... 6 more files ...]
+
+### Risks
+- LOW RISK: Changes appear localized to specific services.
+
+---
+## Implementation Note
+
+This scope shows the **blast radius** (what might break), not requirements.
+
+**Core principles:**
+- Modify only what's needed to solve the stated problem
+- Start simple, defer abstraction until patterns emerge
+- Don't build infrastructure before proving the need
+
+**Ask:** Am I solving the stated problem, or problems I imagine might exist?
+
+---
+**Next steps:**
+- `/q <query>` — semantic search for specific concepts mentioned above
+- Read the files listed under 'Key Files'
+- Use the dependency map to understand ripple effects
 ```
 
-**Why Git History Analysis Prevents Both Under & Over-Scoping:**
+**What Git History Analysis Does:**
 
-1. **Prevents under-scoping**: Even simple tasks show median 6 files (not 1-2) based on actual history
-2. **Prevents over-scoping**: Range 3-17 shows some were 3 files - don't assume you need 17!
-3. **Shows realistic complexity**: Based on median (outlier-resistant) of actual past commits
-4. **Range calibrates expectations**: "17-2819 lines" → huge variance, start simple
-5. **Task-specific filtering**: Removes massive refactors that inflate averages
+1. **Finds similar past tasks**: Searches last 50 commits for similar keywords
+2. **Filters by task type**: Separates "add endpoint" from "API refactor" 
+3. **Removes outliers**: Filters massive refactors (21+ files) that inflate averages
+4. **Shows median + range**: "median 6 files, range 3-17" calibrates expectations
+5. **Pattern detection**: Vector search finds existing similar implementations
+
+**Limitations:**
+
+- Only as good as past commit history - if past devs over-engineered, it shows inflated numbers
+- Keyword matching can be imprecise
+- Can't distinguish "should be simple" from "historically was complex"
 
 ### `/q <query>`
 Semantic code search. Returns top 3 code snippets matching your query.
