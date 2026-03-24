@@ -206,6 +206,58 @@ OpenCode auto-loads architecture.md on session start
 ### `/scope <task>` (Use This First)
 Blast-radius analysis with automatic intelligence. Tells you what will break and how complex the task is.
 
+**Example Output:**
+```markdown
+$ repo-brain scope "add filtering to rule agent context"
+
+## Task Scope Analysis
+
+**Task**: add filtering to rule agent context
+
+### Task Intelligence
+
+**Estimated Complexity**: HIGH
+**Historical Pattern**: 6 similar tasks found - typically modified 34.0 files, 0.0 lines
+**Code Pattern**: 11 service implementation(s) exist
+  - Examples: services/docs/.../discovery-system.md, services/rest-api/.../rule_grpc_client.py
+
+**Recommendation**: Historical: Similar tasks modified ~34.0 files, ~0.0 lines; 
+Pattern: 11 service implementations exist; Complexity: HIGH - plan carefully, test thoroughly
+
+### Affected Services
+- **swarm-node** (6 matches) — Swarm-Node MCP server (deps: postgres, kafka, redis; used by: event-swarm-node, planner-mcp)
+- **rule-mcp** (3 matches) — Rule MCP Server with ChromaDB integration (deps: postgres, neo4j, chromadb)
+- **rest-api** (2 matches) — REST API service (deps: postgres, neo4j; used by: platform-mcp, playwright)
+
+### Key Files
+- `services/swarm-node/app/src/swarm_node/coordination/agent_context_filter.py` — filter_context
+- `services/swarm-node/app/tests/unit/test_agent_context_filter.py` — test_rule_agent_receives_discovered_entities_filtered
+- `libraries/python/schemas/src/schemas/api/rules.py` — ListRulesParams
+- `mcp_servers/rule-mcp/app/src/rule_mcp_server/rule_service.py` — list_rules
+[... 8 more files ...]
+
+### Risks
+- LOW RISK: Changes appear localized to specific services.
+
+---
+## Implementation Note
+
+This scope shows the **blast radius** (what might break), not requirements.
+
+**Core principles:**
+- Modify only what's needed to solve the stated problem
+- Start simple, defer abstraction until patterns emerge
+- Don't build infrastructure before proving the need
+
+**Ask:** Am I solving the stated problem, or problems I imagine might exist?
+
+---
+**Next steps:**
+- `/q <query>` — semantic search for specific concepts mentioned above
+- Read the files listed under 'Key Files'
+- Use the dependency map to understand ripple effects
+```
+
 ### `/q <query>`
 Semantic code search. Returns top 3 code snippets matching your query.
 
