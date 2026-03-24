@@ -1,0 +1,23 @@
+OVERVIEW.md
+  99e96e541e92f5c1 78-118
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "214dc7e5ed0546b5610defd4939a642bae30e254",
+  "prompts": {
+    "99e96e541e92f5c1": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2dfa96a96ffeGAF86C40OHS798",
+        "model": "github-copilot/claude-sonnet-4.5"
+      },
+      "human_author": "esavci <esavci+github@cisco.com>",
+      "messages": [],
+      "total_additions": 41,
+      "total_deletions": 0,
+      "accepted_lines": 41,
+      "overriden_lines": 0
+    }
+  }
+}
