@@ -79,97 +79,51 @@ But "if you change this, these 12 services will break"
 ```
 User: /scope add filtering to rule agent context
   │
-  ├─► Step 0: Task Intelligence Analysis
-  │   ├─► Git History Analyzer
-  │   │   └─► Analyzes last 50 commits for similar keywords
-  │   │       └─► Output: "5 similar tasks modified ~2.4 files, ~180 lines"
+  ├─► Step 0: Task Intelligence (NEW!)
   │   │
-  │   ├─► Pattern Detector
-  │   │   └─► Vector search for similar code patterns
-  │   │       └─► Output: "No filtering logic found → inline solution"
+  │   ├─► Git History Analyzer
+  │   │   • Searches last 50 commits for similar keywords
+  │   │   • Calculates: avg files changed, avg lines changed
+  │   │   • Why: Learn from past similar tasks
+  │   │   • Output: "6 similar tasks modified ~34 files, ~6k lines"
+  │   │
+  │   ├─► Pattern Detector  
+  │   │   • Vector search for existing similar code
+  │   │   • Classifies: library, utility, service, inline
+  │   │   • Why: Avoid reinventing the wheel or over-engineering
+  │   │   • Output: "11 service implementations exist"
   │   │
   │   └─► Complexity Estimator
-  │       └─► Based on git history data
-  │           └─► Output: "LOW complexity"
+  │       • Based on historical + pattern data
+  │       • Estimates: LOW (<200 lines), MEDIUM (200-500), HIGH (500+)
+  │       • Why: Set AI expectations upfront
+  │       • Output: "HIGH complexity - plan carefully"
   │
-  ├─► Step 1: Semantic Search (Vector DB)
-  │   └─► Query: "add filtering to rule agent context"
-  │       └─► Returns top 20 relevant code chunks with metadata
-  │
-  ├─► Step 2: Extract Affected Services
-  │   └─► Groups results by service name (from file paths)
-  │       └─► Ranks by hit count
-  │           └─► Output: ["rule-agent": 5 hits, "context-manager": 2 hits]
-  │
-  ├─► Step 3: Get Graph Context (Dependency Graph)
-  │   └─► For each affected service:
-  │       ├─► get_upstream(depth=2) → What it depends on
-  │       └─► get_downstream(depth=2) → What depends on it
-  │           └─► Output: Dependencies + dependents for each service
-  │
-  ├─► Step 4: Build Key Files List
-  │   └─► Deduplicate and rank files from search results
-  │       └─► Output: Top 12 files with line numbers + symbols
-  │
-  ├─► Step 5: Risk Assessment
-  │   └─► Count downstream dependents per service
-  │       └─► HIGH RISK: >10 dependents
-  │       └─► MODERATE RISK: >3 dependents
-  │       └─► Output: Risk warnings for each service
-  │
-  ├─► Step 6: Suggested Reading Order
-  │   └─► Rank files by: service priority + search relevance
-  │       └─► Output: Ordered list of files to read
+  ├─► Step 1-6: Blast Radius Analysis
+  │   • Semantic search → Extract services → Get graph context
+  │   • Build file list → Risk assessment → Reading order
   │
   └─► Step 7: Format Output
-      └─► Markdown with sections:
-          ├─► Task Intelligence (NEW!)
-          │   ├─► Complexity estimate
-          │   ├─► Historical pattern
-          │   ├─► Code patterns detected
-          │   └─► Recommendation
-          ├─► Affected Services (with deps)
-          ├─► Key Files
-          ├─► Risk Assessment
-          ├─► Implementation Note (guidance)
-          └─► Next Steps
+      • Task Intelligence section (complexity + history + patterns)
+      • Affected Services (with dependencies)
+      • Key Files + Risk Assessment + Implementation Note
 
 OpenCode receives formatted output → Injects into LLM context
 ```
+
+**Why Git History Matters:**
+- **Realistic estimates**: "Similar tasks took 34 files, not 3" prevents under-scoping
+- **Pattern learning**: "Filtering always touches X, Y, Z files" guides AI
+- **Complexity detection**: Automatically flags large refactors vs simple changes
+- **Zero guessing**: Based on actual past behavior, not assumptions
 
 ### `/q <query>` Flow
 
 ```
 User: /q how is authentication handled
-  │
-  ├─► Step 1: Semantic Search (Vector DB)
-  │   └─► Embed query using sentence-transformers
-  │       └─► Query ChromaDB for similar vectors
-  │           └─► Returns top 3 most similar code chunks
-  │
-  ├─► Step 2: Format Results
-  │   └─► For each result:
-  │       ├─► Extract metadata (file, line, symbol)
-  │       ├─► Get code snippet
-  │       └─► Format as markdown code block
-  │
-  └─► Step 3: Return Output
-      └─► Markdown with 3 code snippets:
-          
-          ```
-          ## Code Search Results
-          
-          ### services/auth/main.py:45-67
-          **Symbol**: authenticate_user
-          
-          ```python
-          def authenticate_user(username: str, password: str) -> User:
-              # ... actual code from file ...
-          ```
-          
-          [... 2 more results ...]
-          ```
-
+  ↓
+Semantic Search (Vector DB) → Top 3 code chunks → Format as markdown
+  ↓
 OpenCode receives output → Injects into LLM context
 ```
 
@@ -177,28 +131,10 @@ OpenCode receives output → Injects into LLM context
 
 ```
 User: /summarize
-  │
-  ├─► Step 1: Gather Context
-  │   ├─► Read repomap.md
-  │   ├─► Load dependency graph (graph.json)
-  │   └─► Read README.md (if exists)
-  │
-  ├─► Step 2: Format for LLM
-  │   └─► Combine all sources into structured markdown:
-  │       ├─► Repo structure (from repomap)
-  │       ├─► Service dependencies (from graph)
-  │       └─► Project overview (from README)
-  │
-  ├─► Step 3: Send to LLM
-  │   └─► Prompt: "Write an architecture summary based on this context"
-  │       └─► LLM generates architecture.md
-  │
-  └─► Step 4: Save & Configure
-      ├─► Write to .repo-brain/architecture.md
-      └─► Update opencode.json to auto-load this file
-          └─► Now architecture.md loads on every OpenCode session
-
-OpenCode auto-loads architecture.md on session start
+  ↓  
+Gather (repomap + graph + README) → LLM generates architecture.md → Auto-load on sessions
+  ↓
+OpenCode auto-loads architecture.md on every session start
 ```
 
 ## Commands
@@ -217,46 +153,33 @@ $ repo-brain scope "add filtering to rule agent context"
 ### Task Intelligence
 
 **Estimated Complexity**: HIGH
-**Historical Pattern**: 6 similar tasks found - typically modified 34.0 files, 0.0 lines
+**Historical Pattern**: 6 similar tasks found - typically modified 34.0 files, 6099 lines
 **Code Pattern**: 11 service implementation(s) exist
-  - Examples: services/docs/.../discovery-system.md, services/rest-api/.../rule_grpc_client.py
+  - Examples: services/swarm-node/.../agent_context_filter.py, services/rest-api/.../rule_grpc_client.py
 
-**Recommendation**: Historical: Similar tasks modified ~34.0 files, ~0.0 lines; 
+**Recommendation**: Historical: Similar tasks modified ~34.0 files, ~6099 lines; 
 Pattern: 11 service implementations exist; Complexity: HIGH - plan carefully, test thoroughly
 
 ### Affected Services
-- **swarm-node** (6 matches) — Swarm-Node MCP server (deps: postgres, kafka, redis; used by: event-swarm-node, planner-mcp)
-- **rule-mcp** (3 matches) — Rule MCP Server with ChromaDB integration (deps: postgres, neo4j, chromadb)
-- **rest-api** (2 matches) — REST API service (deps: postgres, neo4j; used by: platform-mcp, playwright)
+- **swarm-node** (6 matches) — Swarm-Node MCP server (deps: postgres, kafka, redis)
+- **rule-mcp** (3 matches) — Rule MCP Server with ChromaDB integration
 
 ### Key Files
 - `services/swarm-node/app/src/swarm_node/coordination/agent_context_filter.py` — filter_context
-- `services/swarm-node/app/tests/unit/test_agent_context_filter.py` — test_rule_agent_receives_discovered_entities_filtered
 - `libraries/python/schemas/src/schemas/api/rules.py` — ListRulesParams
-- `mcp_servers/rule-mcp/app/src/rule_mcp_server/rule_service.py` — list_rules
-[... 8 more files ...]
+[... 10 more files ...]
 
 ### Risks
 - LOW RISK: Changes appear localized to specific services.
-
----
-## Implementation Note
-
-This scope shows the **blast radius** (what might break), not requirements.
-
-**Core principles:**
-- Modify only what's needed to solve the stated problem
-- Start simple, defer abstraction until patterns emerge
-- Don't build infrastructure before proving the need
-
-**Ask:** Am I solving the stated problem, or problems I imagine might exist?
-
----
-**Next steps:**
-- `/q <query>` — semantic search for specific concepts mentioned above
-- Read the files listed under 'Key Files'
-- Use the dependency map to understand ripple effects
 ```
+
+**Why Git History Analysis is Useful:**
+
+1. **Prevents under-scoping**: "This looks simple" → Git says "last 3 similar tasks touched 30+ files" → AI knows it's actually complex
+2. **Realistic estimates**: Based on actual past commits, not guesses
+3. **Guides AI expectations**: "HIGH complexity" → AI plans more carefully, doesn't rush
+4. **Pattern learning**: "Authentication changes always touch X, Y, Z" → AI checks those files proactively
+5. **Automatic**: Zero user input - analyzes repo history in real-time
 
 ### `/q <query>`
 Semantic code search. Returns top 3 code snippets matching your query.

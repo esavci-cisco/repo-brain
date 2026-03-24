@@ -158,24 +158,12 @@ class GitHistoryAnalyzer:
             Commit statistics or None if unable to extract
         """
         try:
-            # Get changed files
-            if commit.parents:
-                diffs = commit.parents[0].diff(commit)
-                files_changed = [d.a_path or d.b_path for d in diffs]
+            # Get changed files and line stats
+            files_changed = list(commit.stats.files.keys())
 
-                # Calculate line changes
-                lines_added = 0
-                lines_removed = 0
-                for diff in diffs:
-                    if diff.diff:
-                        diff_str = diff.diff.decode("utf-8", errors="ignore")
-                        lines_added += diff_str.count("\n+")
-                        lines_removed += diff_str.count("\n-")
-            else:
-                # First commit
-                files_changed = list(commit.stats.files.keys())
-                lines_added = sum(stats["insertions"] for stats in commit.stats.files.values())
-                lines_removed = sum(stats["deletions"] for stats in commit.stats.files.values())
+            # Use commit.stats for accurate line counts (more reliable than parsing diffs)
+            lines_added = sum(stats.get("insertions", 0) for stats in commit.stats.files.values())
+            lines_removed = sum(stats.get("deletions", 0) for stats in commit.stats.files.values())
 
             return CommitStats(
                 hash=commit.hexsha[:8],
