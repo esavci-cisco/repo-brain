@@ -263,14 +263,15 @@ def _analyze_task_intelligence(
             }
 
             # Estimate complexity using median (more realistic than average)
+            # Adjusted thresholds based on actual repo patterns
             if (
-                historical_pattern.median_files_changed <= 5
-                and historical_pattern.median_lines_changed < 500
+                historical_pattern.median_files_changed <= 3
+                and historical_pattern.median_lines_changed < 300
             ):
                 intelligence["complexity_estimate"] = "LOW"
             elif (
-                historical_pattern.median_files_changed <= 10
-                and historical_pattern.median_lines_changed < 1500
+                historical_pattern.median_files_changed <= 8
+                and historical_pattern.median_lines_changed < 1200
             ):
                 intelligence["complexity_estimate"] = "MEDIUM"
             else:
