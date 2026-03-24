@@ -1,0 +1,23 @@
+src/repo_brain/tools/scope.py
+  99e96e541e92f5c1 157-168
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "49ca9e1a393557ab23021d60f512e42c1e6b62b2",
+  "prompts": {
+    "99e96e541e92f5c1": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2dfa96a96ffeGAF86C40OHS798",
+        "model": "github-copilot/claude-sonnet-4.5"
+      },
+      "human_author": "esavci <esavci+github@cisco.com>",
+      "messages": [],
+      "total_additions": 12,
+      "total_deletions": 0,
+      "accepted_lines": 12,
+      "overriden_lines": 0
+    }
+  }
+}
