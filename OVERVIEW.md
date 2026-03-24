@@ -77,96 +77,88 @@ repo-brain typically uses **25-30% more tokens** than regular OpenCode because i
 
 ## Future Improvements
 
-### Structured Task Input (High Priority)
-**Problem**: Free-form prompts lead to inconsistent results:
-- Vague prompts ("add filtering") → AI guesses and over-engineers
-- Over-detailed prompts ("add proper abstraction with reusability") → AI feels obligated to implement everything
-- Jira imports → Generic user stories without technical constraints
-- Varied user styles → Some want simple, some want "proper architecture"
+### Inspiration: Aider, RepoMapper, CodeMap
+These tools succeed by **eliminating decision-making**, not adding to it:
+- **Aider**: `aider <files>` → Automatically builds repo map
+- **RepoMapper**: `python repomap.py .` → Generates ranked map  
+- **CodeMap**: Connect GitHub → AI reads code → Get docs (60 seconds)
 
-**Real examples of current problems**:
-- `"add filtering"` → AI guesses scope, might build entire library
-- `"add filtering to rule agent context in swarm graph with proper abstraction and reusability"` → AI over-engineers because user said "proper"
-- Jira: `"As a user I want..."` → Too generic, no technical constraints
-- User vibes: `"make it work"` → No guidance, AI makes assumptions
+**Key insight**: Zero user input about structure. Tool figures out everything automatically.
 
-**Solution**: Template-based task specification for `/scope`
+### Smarter `/scope` Inference (High Priority)
+Instead of asking users to specify complexity/constraints, **automatically infer** from codebase analysis:
 
-**Option 1: Structured format**
-```bash
-/scope
-Task: Add filtering to rule agent context
-Scope: Modify existing files only
-Complexity: LOW (single feature, one service)
-Constraints:
-  - Do NOT create new libraries
-  - Do NOT create new services
-  - Inline solution preferred
-Expected: ~200 lines, 2-3 files
-```
+**Current**: User types task → `/scope` returns context  
+**Proposed**: User types task → `/scope` analyzes codebase → Returns context + smart recommendations
 
-**Option 2: Interactive prompt**
-```
-> /scope --interactive
-? What needs to be done: Add filtering to rule agent context
-? Allow creating new libraries: No
-? Allow creating new services: No  
-? Approximate scope: Single file / Few files / Cross-service
-? Expected complexity: LOW / MEDIUM / HIGH
+**What to infer automatically**:
+
+1. **Git History Analysis**
+   ```
+   "Last 10 similar features modified 2-3 files, avg 180 lines"
+   "Similar tasks (filtering, validation) usually inline, not libraries"
+   ```
+
+2. **Pattern Detection**
+   ```
+   "No other filtering logic found in codebase"
+   → Recommendation: Inline solution, don't build library
+   
+   "5 similar filtering utilities exist across services"
+   → Recommendation: Consider shared library
+   ```
+
+3. **Risk Assessment**
+   ```
+   "Rule agent has 0 downstream dependents"
+   → Risk: MINIMAL, safe to modify inline
+   
+   "Auth service has 12 dependents"
+   → Risk: HIGH, comprehensive testing needed
+   ```
+
+4. **Complexity Detection**
+   ```
+   Detected complexity: LOW (single service, ~2-3 files likely)
+   Suggested approach: Inline modification
+   Expected scope: 150-200 lines based on similar tasks
+   ```
+
+**Example Output**:
+```markdown
+## Task Analysis
+**Detected complexity:** LOW (single service, similar to 8 past tasks)
+**Historical pattern:** Tasks like this modified 2-3 files, avg 180 lines
+**Pattern check:** No existing filtering logic found
+**Recommendation:** Inline solution (don't create library)
+**Risk:** MINIMAL (rule agent has 0 dependents)
+
+## Affected Files
+[... rest of scope output ...]
 ```
 
 **Benefits**:
-- Explicit constraints AI can't ignore
-- Consistent format regardless of who creates the task (Jira, user, team lead)
-- Separates "what" (task) from "how" (implementation details left to AI)
-- User's writing style doesn't affect interpretation
-- Works with automation (Jira webhook → structured format → `/scope`)
-
-**Implementation**:
-- Add `--interactive` flag to `/scope` command for Q&A mode
-- Support structured YAML/JSON input format
-- Parse and validate constraints
-- Include constraints prominently in scope output
-- Post-implementation: Check if AI violated stated constraints
-
-### Hard Complexity Budgets
-Add task-specific estimates to `/scope` output:
-```markdown
-**Estimated complexity:** LOW
-**Expected changes:** 2-3 files, ~200 lines
-**Should create new library?** NO
-```
-
-**Pro**: Harder to ignore than soft guidance, gives AI concrete targets  
-**Con**: Could be too restrictive for legitimate large changes  
-**Middle ground**: Provide estimate but allow exceeding with explicit justification
-
-### Better Context Control
-- **Scoping modes**: `/scope --minimal` (files only) vs `/scope --full` (complete architecture)
-- **Context ranking**: Mark files as "reference only" vs "likely needs changes"
-- **Incremental loading**: Start with minimal context, expand only if AI asks for more
+- No user questions or forms
+- Smart defaults based on actual codebase patterns
+- Historical learning from git commits
+- AI gets concrete guidance without user effort
 
 ### Post-Implementation Validation
-- **Complexity check**: After implementation, compare actual vs expected (LoC, files changed, new abstractions)
-- **Anti-pattern detection**: Warn if creating library for single use case, or if docs > code
-- **Success tracking**: Log metrics (LoC, files, time) to learn what "good" looks like over time
+- **Complexity check**: After implementation, compare actual vs predicted
+- **Anti-pattern detection**: Warn if creating library for single use case
+- **Feedback loop**: Track accuracy of predictions, improve over time
 
-### Historical Learning
-- **Pattern analysis**: "Last 5 similar tasks changed 2-4 files averaging 180 lines"
-- **Team norms**: Learn from accepted PRs vs rejected over-engineering
-- **Feedback loop**: Track which approaches led to quick merges vs rewrites
-
-### Smarter Semantic Search
-- **File clustering**: Group related files to reduce noise in `/scope` results
-- **Change prediction**: Use git history to predict which files likely need changes together
-- **Relevance scoring**: Distinguish "must read" vs "nice to know" in search results
+### Better Context Control
+- **Scoping modes**: `/scope --minimal` vs `/scope --full` for different use cases
+- **Context ranking**: Mark files as "reference only" vs "likely needs changes"
+- **Relevance scoring**: Distinguish "must read" vs "nice to know"
 
 ### Integration Improvements
-- **Live feedback**: Show token usage during session ("You've used 50% of typical task budget")
-- **Diff preview**: Before committing, show complexity metrics vs repo norms
+- **Live feedback**: Show complexity budget during session
+- **Diff preview**: Compare actual changes vs predictions
 - **Architecture drift detection**: Alert if changes violate documented patterns
 
-Goal: Make AI more aware of "enough" context without overwhelming it with "all" context.
+**Goal**: Make `/scope` as smart as Aider's repo map - zero user input, maximum insight.
 
 ## Technical Details
 - **Local storage**: `~/.repo-brain/` (no Docker, no cloud)
