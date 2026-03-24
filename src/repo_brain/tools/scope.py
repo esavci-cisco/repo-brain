@@ -154,6 +154,18 @@ def format_scope_result(result: dict[str, Any]) -> str:
     # Post-call guidance — suggests follow-up actions so the LLM
     # continues using pre-indexed data rather than falling back to grep/glob.
     lines.append("---")
+    lines.append("## Implementation Note")
+    lines.append("")
+    lines.append("This scope shows the **blast radius** (what might break), not requirements.")
+    lines.append("")
+    lines.append("**Core principles:**")
+    lines.append("- Modify only what's needed to solve the stated problem")
+    lines.append("- Start simple, defer abstraction until patterns emerge")
+    lines.append("- Don't build infrastructure before proving the need")
+    lines.append("")
+    lines.append("**Ask:** Am I solving the stated problem, or problems I imagine might exist?")
+    lines.append("")
+    lines.append("---")
     lines.append("**Next steps:**")
     lines.append("- `/q <query>` — semantic search for specific concepts mentioned above")
     lines.append("- Read the files listed under 'Key Files'")
