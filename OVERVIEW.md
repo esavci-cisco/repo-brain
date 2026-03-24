@@ -84,6 +84,12 @@ repo-brain typically uses **25-30% more tokens** than regular OpenCode because i
 - Jira imports → Generic user stories without technical constraints
 - Varied user styles → Some want simple, some want "proper architecture"
 
+**Real examples of current problems**:
+- `"add filtering"` → AI guesses scope, might build entire library
+- `"add filtering to rule agent context in swarm graph with proper abstraction and reusability"` → AI over-engineers because user said "proper"
+- Jira: `"As a user I want..."` → Too generic, no technical constraints
+- User vibes: `"make it work"` → No guidance, AI makes assumptions
+
 **Solution**: Template-based task specification for `/scope`
 
 **Option 1: Structured format**
