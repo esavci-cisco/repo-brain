@@ -147,14 +147,15 @@ Blast-radius analysis with automatic intelligence. Tells you what will break and
 $ repo-brain scope "add filtering to rule agent context"
 
 ### Task Intelligence
-**Estimated Complexity**: HIGH
-**Historical Pattern**: 6 similar tasks - typically modified 34 files, 6099 lines
+**Estimated Complexity**: MEDIUM
+**Historical Pattern**: 4 similar tasks - median 6 files, 819 lines
+  - Range: 1-24 files, 159-1673 lines
 **Code Pattern**: 11 service implementations exist
-**Recommendation**: HIGH complexity - plan carefully, test thoroughly
+**Recommendation**: Median 6 files, 819 lines (range 1-24) - can be simple (1 file) or complex (24 files). Start minimal.
 
 ### Affected Services
 - **swarm-node** (6 matches) — Swarm-Node MCP server
-- **rule-mcp** (3 matches) — Rule MCP Server with ChromaDB
+- **rule-mcp** (3 matches) — Rule MCP Server
 
 ### Key Files
 - `services/swarm-node/.../agent_context_filter.py` — filter_context
@@ -167,31 +168,29 @@ $ repo-brain scope "add filtering to rule agent context"
 $ repo-brain scope "add an endpoint to export devices in a topology"
 
 ### Task Intelligence
-**Estimated Complexity**: HIGH
-**Historical Pattern**: 13 similar tasks - typically modified 9.2 files, 1259 lines
+**Estimated Complexity**: MEDIUM
+**Historical Pattern**: 10 similar tasks - median 6 files, 1409 lines
+  - Range: 3-17 files, 17-2819 lines
 **Code Pattern**: 9 service implementations exist
-**Recommendation**: HIGH complexity - plan carefully, test thoroughly
+**Recommendation**: Median 6 files, 1409 lines (range 3-17) - start with 3-6 files, expand only if needed.
 
 ### Affected Services
 - **rest-api** (7 matches) — REST API service
 - **tac** (2 matches) — TAC Service
-- **platform-mcp** (1 matches) — Platform MCP Server
 
 ### Key Files
 - `services/rest-api/.../job_translator_service.py` — build_topology
-- `services/rest-api/.../ai_test_plan.py` — _extract_devices_from_topologies
-- `libraries/python/schemas/src/schemas/api/device.py` — TopologyDevicesResponse
 - `services/tac/app/src/tac/routers/topologies.py` — TopologyListItem
-[... 8 more files ...]
+[... 10 more files ...]
 ```
 
-**Why Git History Analysis is Useful:**
+**Why Git History Analysis Prevents Both Under & Over-Scoping:**
 
-1. **Prevents under-scoping**: "This looks simple" → Git says "last 3 similar tasks touched 30+ files" → AI knows it's actually complex
-2. **Realistic estimates**: Based on actual past commits, not guesses
-3. **Guides AI expectations**: "HIGH complexity" → AI plans more carefully, doesn't rush
-4. **Pattern learning**: "Authentication changes always touch X, Y, Z" → AI checks those files proactively
-5. **Automatic**: Zero user input - analyzes repo history in real-time
+1. **Prevents under-scoping**: "add endpoint" → looks simple but history shows median 6 files (not 1-2)
+2. **Prevents over-scoping**: Range 3-17 shows some were simple (3 files) - don't assume you need 17!
+3. **Realistic estimates**: Based on median (not average) to avoid outlier inflation
+4. **Shows variance**: Range helps AI understand this could be 3 files OR 17, start simple
+5. **Automatic outlier removal**: Filters out massive refactors (21-file API standardizations) that inflate averages
 
 ### `/q <query>`
 Semantic code search. Returns top 3 code snippets matching your query.

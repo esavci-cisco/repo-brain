@@ -130,11 +130,15 @@ def format_scope_result(result: dict[str, Any]) -> str:
         # Show git history analysis
         git_hist = intelligence.get("git_history")
         if git_hist:
+            min_files, min_lines = git_hist.get("min_complexity", (0, 0))
+            max_files, max_lines = git_hist.get("max_complexity", (0, 0))
+            median_f = git_hist["median_files_changed"]
+            median_l = git_hist["median_lines_changed"]
             lines.append(
-                f"**Historical Pattern**: {git_hist['similar_tasks_found']} similar tasks found - "
-                f"typically modified {git_hist['avg_files_changed']} files, "
-                f"{git_hist['avg_lines_changed']} lines"
+                f"**Historical Pattern**: {git_hist['similar_tasks_found']} similar tasks - "
+                f"median {median_f:.0f} files, {median_l:.0f} lines"
             )
+            lines.append(f"  - Range: {min_files}-{max_files} files, {min_lines}-{max_lines} lines")
 
         # Show code pattern analysis
         code_patterns = intelligence.get("code_patterns")
@@ -251,20 +255,22 @@ def _analyze_task_intelligence(
         if historical_pattern:
             intelligence["git_history"] = {
                 "similar_tasks_found": len(historical_pattern.similar_tasks),
-                "avg_files_changed": round(historical_pattern.avg_files_changed, 1),
-                "avg_lines_changed": round(historical_pattern.avg_lines_changed, 0),
+                "median_files_changed": round(historical_pattern.median_files_changed, 1),
+                "median_lines_changed": round(historical_pattern.median_lines_changed, 0),
+                "min_complexity": historical_pattern.min_complexity,
+                "max_complexity": historical_pattern.max_complexity,
                 "recommendation": historical_pattern.recommendation,
             }
 
-            # Estimate complexity
+            # Estimate complexity using median (more realistic than average)
             if (
-                historical_pattern.avg_files_changed <= 3
-                and historical_pattern.avg_lines_changed < 200
+                historical_pattern.median_files_changed <= 5
+                and historical_pattern.median_lines_changed < 500
             ):
                 intelligence["complexity_estimate"] = "LOW"
             elif (
-                historical_pattern.avg_files_changed <= 7
-                and historical_pattern.avg_lines_changed < 500
+                historical_pattern.median_files_changed <= 10
+                and historical_pattern.median_lines_changed < 1500
             ):
                 intelligence["complexity_estimate"] = "MEDIUM"
             else:
@@ -295,9 +301,12 @@ def _analyze_task_intelligence(
 
     if intelligence["git_history"]:
         hist = intelligence["git_history"]
+        min_files, min_lines = hist.get("min_complexity", (0, 0))
+        max_files, max_lines = hist.get("max_complexity", (0, 0))
         recommendations.append(
-            f"Historical: Similar tasks modified ~{hist['avg_files_changed']} files, "
-            f"~{hist['avg_lines_changed']} lines"
+            f"Historical: Median {hist['median_files_changed']} files, "
+            f"{hist['median_lines_changed']} lines "
+            f"(range: {min_files}-{max_files} files, {min_lines}-{max_lines} lines)"
         )
 
     if intelligence["code_patterns"]:
