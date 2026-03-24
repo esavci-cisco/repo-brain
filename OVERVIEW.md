@@ -142,77 +142,64 @@ OpenCode auto-loads architecture.md on every session start
 ### `/scope <task>` (Use This First)
 Blast-radius analysis with automatic intelligence. Tells you what will break and how complex the task is.
 
-**Example 1: Simple Task (LOW)**
+**Example 1:**
 ```markdown
-$ repo-brain scope "add health check endpoint to service"
+$ repo-brain scope "add health check endpoint"
 
 ### Task Intelligence
-**Estimated Complexity**: LOW
-**Historical Pattern**: 8 similar tasks - median 2 files, 45 lines
-  - Range: 1-4 files, 15-120 lines
-**Code Pattern**: 15 health check implementations exist
-**Recommendation**: Simple (median 2 files, 45 lines); Range 1-4 files - start minimal
+**Estimated Complexity**: HIGH
+**Historical Pattern**: 9 similar tasks - median 6 files, 1409 lines
+  - Range: 4-17 files, 17-2819 lines
+**Code Pattern**: 17 service implementations exist
+
+**Recommendation**: Median 6 files, 1409 lines (range 4-17) - plan carefully, test thoroughly
 
 ### Affected Services
-- **rest-api** (3 matches) — REST API service
-
-### Key Files
-- `services/rest-api/app/src/rest_api/main.py` — health endpoints
-- `services/rest-api/app/tests/test_health.py` — health tests
+- **monitoring-service** (6 matches) — FAA Monitoring Service
+- **rest-api** (4 matches) — REST API service
 ```
 
-**Example 2: Medium Task (MEDIUM)**
+**Example 2:**
 ```markdown
 $ repo-brain scope "add an endpoint to export devices in a topology"
 
 ### Task Intelligence
-**Estimated Complexity**: MEDIUM
+**Estimated Complexity**: HIGH
 **Historical Pattern**: 10 similar tasks - median 6 files, 1409 lines
   - Range: 3-17 files, 17-2819 lines
 **Code Pattern**: 9 service implementations exist
-**Recommendation**: Moderate (median 6 files); Range 3-17 - start with 3-6, expand if needed
+
+**Recommendation**: Median 6 files, 1409 lines (range 3-17) - plan carefully, test thoroughly
 
 ### Affected Services
 - **rest-api** (7 matches) — REST API service
 - **tac** (2 matches) — TAC Service
-
-### Key Files
-- `services/rest-api/.../job_translator_service.py` — build_topology
-- `services/tac/app/src/tac/routers/topologies.py` — TopologyListItem
-[... 8 more files ...]
 ```
 
-**Example 3: Complex Task (HIGH)**
+**Example 3:**
 ```markdown
 $ repo-brain scope "create token reduction system across multiple services"
 
 ### Task Intelligence
-**Estimated Complexity**: HIGH
-**Historical Pattern**: 6 similar tasks - median 15 files, 2500 lines
-  - Range: 8-35 files, 1200-5000 lines
-**Code Pattern**: 4 cross-service systems exist
-**Recommendation**: Complex (median 15 files, 2500 lines); Range 8-35 - plan carefully, test thoroughly
+**Estimated Complexity**: MEDIUM
+**Historical Pattern**: 4 similar tasks - median 6 files, 819 lines
+  - Range: 3-17 files, 190-1409 lines
+**Code Pattern**: 8 library implementations exist
+
+**Recommendation**: Median 6 files, 819 lines (range 3-17) - consider modular approach
 
 ### Affected Services
-- **llm-adapter** (8 matches) — LLM adapter service
-- **swarm-node** (6 matches) — Swarm coordination
-- **rest-api** (4 matches) — REST API service
-- **context-manager** (3 matches) — Context management
-
-### Key Files
-- `services/llm-adapter/.../token_counter.py` — token tracking
-- `services/swarm-node/.../context_optimizer.py` — context optimization
-- `libraries/python/schemas/.../token_limits.py` — token schemas
-[... 12 more files ...]
+- **python** (8 matches)
+- **docs** (4 matches) — Documentation hosting service
 ```
 
 **Why Git History Analysis Prevents Both Under & Over-Scoping:**
 
-1. **Prevents under-scoping**: "add endpoint" → history shows median 6 files (not 1-2)
-2. **Prevents over-scoping**: Range 3-17 shows some were simple (3 files) - don't build for 17!
-3. **Shows realistic complexity**: LOW (1-3 files), MEDIUM (4-10 files), HIGH (10+ files)
-4. **Range calibrates expectations**: "15-120 lines" → could be 15, don't assume 120
-5. **Task-specific**: Health check (simple) vs cross-service system (complex)
+1. **Prevents under-scoping**: Even simple tasks show median 6 files (not 1-2) based on actual history
+2. **Prevents over-scoping**: Range 3-17 shows some were 3 files - don't assume you need 17!
+3. **Shows realistic complexity**: Based on median (outlier-resistant) of actual past commits
+4. **Range calibrates expectations**: "17-2819 lines" → huge variance, start simple
+5. **Task-specific filtering**: Removes massive refactors that inflate averages
 
 ### `/q <query>`
 Semantic code search. Returns top 3 code snippets matching your query.
