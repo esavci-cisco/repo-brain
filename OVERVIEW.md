@@ -142,35 +142,47 @@ OpenCode auto-loads architecture.md on every session start
 ### `/scope <task>` (Use This First)
 Blast-radius analysis with automatic intelligence. Tells you what will break and how complex the task is.
 
-**Example Output:**
+**Example 1:**
 ```markdown
 $ repo-brain scope "add filtering to rule agent context"
 
-## Task Scope Analysis
-
-**Task**: add filtering to rule agent context
-
 ### Task Intelligence
-
 **Estimated Complexity**: HIGH
-**Historical Pattern**: 6 similar tasks found - typically modified 34.0 files, 6099 lines
-**Code Pattern**: 11 service implementation(s) exist
-  - Examples: services/swarm-node/.../agent_context_filter.py, services/rest-api/.../rule_grpc_client.py
-
-**Recommendation**: Historical: Similar tasks modified ~34.0 files, ~6099 lines; 
-Pattern: 11 service implementations exist; Complexity: HIGH - plan carefully, test thoroughly
+**Historical Pattern**: 6 similar tasks - typically modified 34 files, 6099 lines
+**Code Pattern**: 11 service implementations exist
+**Recommendation**: HIGH complexity - plan carefully, test thoroughly
 
 ### Affected Services
-- **swarm-node** (6 matches) — Swarm-Node MCP server (deps: postgres, kafka, redis)
-- **rule-mcp** (3 matches) — Rule MCP Server with ChromaDB integration
+- **swarm-node** (6 matches) — Swarm-Node MCP server
+- **rule-mcp** (3 matches) — Rule MCP Server with ChromaDB
 
 ### Key Files
-- `services/swarm-node/app/src/swarm_node/coordination/agent_context_filter.py` — filter_context
+- `services/swarm-node/.../agent_context_filter.py` — filter_context
 - `libraries/python/schemas/src/schemas/api/rules.py` — ListRulesParams
 [... 10 more files ...]
+```
 
-### Risks
-- LOW RISK: Changes appear localized to specific services.
+**Example 2:**
+```markdown
+$ repo-brain scope "add an endpoint to export devices in a topology"
+
+### Task Intelligence
+**Estimated Complexity**: HIGH
+**Historical Pattern**: 13 similar tasks - typically modified 9.2 files, 1259 lines
+**Code Pattern**: 9 service implementations exist
+**Recommendation**: HIGH complexity - plan carefully, test thoroughly
+
+### Affected Services
+- **rest-api** (7 matches) — REST API service
+- **tac** (2 matches) — TAC Service
+- **platform-mcp** (1 matches) — Platform MCP Server
+
+### Key Files
+- `services/rest-api/.../job_translator_service.py` — build_topology
+- `services/rest-api/.../ai_test_plan.py` — _extract_devices_from_topologies
+- `libraries/python/schemas/src/schemas/api/device.py` — TopologyDevicesResponse
+- `services/tac/app/src/tac/routers/topologies.py` — TopologyListItem
+[... 8 more files ...]
 ```
 
 **Why Git History Analysis is Useful:**
