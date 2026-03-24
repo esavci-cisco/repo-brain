@@ -1,0 +1,59 @@
+OVERVIEW.md
+  99e96e541e92f5c1 1-90
+src/repo_brain/generators/opencode.py
+  a5012e5e6d12c515 177,179,181,183-184,186-193,197-211
+tests/eval/e2e_task_completion.py
+  c29d9f8ea2f021a6 200,202,204,207,209,217,220,222,233-234,255-258,260,262,264-267,269,288-289
+tests/eval/opencode_token_tracker.py
+  c29d9f8ea2f021a6 473-474,482,490,501-504
+src/repo_brain/cli.py
+  a5012e5e6d12c515 366-504,579,584-592,594-600,602
+src/repo_brain/tools/scope.py
+  a5012e5e6d12c515 158-160
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "86a45ce1795dda5366925cc3852983531e79c9c5",
+  "prompts": {
+    "99e96e541e92f5c1": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2dfa96a96ffeGAF86C40OHS798",
+        "model": "github-copilot/claude-sonnet-4.5"
+      },
+      "human_author": "esavci <esavci+github@cisco.com>",
+      "messages": [],
+      "total_additions": 116,
+      "total_deletions": 26,
+      "accepted_lines": 90,
+      "overriden_lines": 0
+    },
+    "a5012e5e6d12c515": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2e1a5e353ffe0HtUXDLGWydmcW",
+        "model": "github-copilot/claude-sonnet-4.5"
+      },
+      "human_author": "esavci <esavci+github@cisco.com>",
+      "messages": [],
+      "total_additions": 384,
+      "total_deletions": 261,
+      "accepted_lines": 207,
+      "overriden_lines": 0
+    },
+    "c29d9f8ea2f021a6": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_2e8183d93ffeab4xs3kL88TYA6",
+        "model": "github-copilot/claude-sonnet-4.5"
+      },
+      "human_author": "esavci <esavci+github@cisco.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 31,
+      "overriden_lines": 0
+    }
+  }
+}
