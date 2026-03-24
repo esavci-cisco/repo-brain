@@ -77,7 +77,53 @@ repo-brain typically uses **25-30% more tokens** than regular OpenCode because i
 
 ## Future Improvements
 
-### Hard Complexity Budgets (Proposed)
+### Structured Task Input (High Priority)
+**Problem**: Free-form prompts lead to inconsistent results:
+- Vague prompts ("add filtering") → AI guesses and over-engineers
+- Over-detailed prompts ("add proper abstraction with reusability") → AI feels obligated to implement everything
+- Jira imports → Generic user stories without technical constraints
+- Varied user styles → Some want simple, some want "proper architecture"
+
+**Solution**: Template-based task specification for `/scope`
+
+**Option 1: Structured format**
+```bash
+/scope
+Task: Add filtering to rule agent context
+Scope: Modify existing files only
+Complexity: LOW (single feature, one service)
+Constraints:
+  - Do NOT create new libraries
+  - Do NOT create new services
+  - Inline solution preferred
+Expected: ~200 lines, 2-3 files
+```
+
+**Option 2: Interactive prompt**
+```
+> /scope --interactive
+? What needs to be done: Add filtering to rule agent context
+? Allow creating new libraries: No
+? Allow creating new services: No  
+? Approximate scope: Single file / Few files / Cross-service
+? Expected complexity: LOW / MEDIUM / HIGH
+```
+
+**Benefits**:
+- Explicit constraints AI can't ignore
+- Consistent format regardless of who creates the task (Jira, user, team lead)
+- Separates "what" (task) from "how" (implementation details left to AI)
+- User's writing style doesn't affect interpretation
+- Works with automation (Jira webhook → structured format → `/scope`)
+
+**Implementation**:
+- Add `--interactive` flag to `/scope` command for Q&A mode
+- Support structured YAML/JSON input format
+- Parse and validate constraints
+- Include constraints prominently in scope output
+- Post-implementation: Check if AI violated stated constraints
+
+### Hard Complexity Budgets
 Add task-specific estimates to `/scope` output:
 ```markdown
 **Estimated complexity:** LOW
