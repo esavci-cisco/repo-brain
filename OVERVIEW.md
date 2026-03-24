@@ -6,6 +6,38 @@ Persistent intelligence layer for OpenCode that gives the AI structural memory a
 ## The Problem
 Every OpenCode session starts from zero. On large codebases, the AI wastes time rediscovering what services exist, how they connect, and where code lives.
 
+## repo-brain's Unique Value
+
+**1. Multi-modal context system**
+- Vector DB (semantic search)
+- Dependency Graph (service relationships from compose.yml, proto files)
+- Repo Map (code structure)
+- **They work together**: `/scope` combines all three
+
+**2. Blast radius analysis**
+```
+Not just "here's your code structure"
+But "if you change this, these 12 services will break"
+```
+
+**3. Built for microservice hell**
+- Designed for 34+ services, 4,300+ files
+- Dependency graph shows service interconnections
+- Risk assessment based on downstream dependents
+
+**4. Persistent across OpenCode sessions**
+- Aider/RepoMapper: regenerate each time
+- repo-brain: ~/.repo-brain/ survives restarts
+
+**5. Preventive workflow**
+- `/scope` BEFORE coding → understand blast radius → avoid mistakes
+- Not just "here's context", but "here's what you'll break"
+
+**6. OpenCode-native**
+- Custom commands (`/scope`, `/q`, `/summarize`)
+- Auto-refreshes on session start
+- Designed for OpenCode's workflow, not generic
+
 ## Where Each Component Is Used
 
 ### Vector DB (ChromaDB)
