@@ -154,61 +154,10 @@ def format_scope_result(result: dict[str, Any]) -> str:
     # Post-call guidance — suggests follow-up actions so the LLM
     # continues using pre-indexed data rather than falling back to grep/glob.
     lines.append("---")
-    lines.append("## Implementation Guidance")
-    lines.append("")
-    lines.append(
-        "**Context Purpose:** The analysis above shows the **blast radius** (what might be affected) and **reference material** (where similar patterns exist). This is NOT a requirements specification."
-    )
-    lines.append("")
-    lines.append("### Core Principles:")
-    lines.append("")
-    lines.append("**1. Understand vs Action**")
-    lines.append('- Files listed above = "might be affected" (check them)')
-    lines.append('- NOT "must modify all these files" (modify only what\'s needed)')
-    lines.append("")
-    lines.append("**2. Solve the Immediate Problem First**")
-    lines.append("- Implement the simplest solution that works")
-    lines.append("- Defer optimization, generalization, and abstraction")
-    lines.append('- Prove the solution works before making it "proper"')
-    lines.append("")
-    lines.append("**3. Start Where the Change Belongs**")
-    lines.append("- Add code in the module that owns the responsibility")
-    lines.append("- Resist the urge to create new layers/modules/packages preemptively")
-    lines.append("- Co-locate related functionality until separation is proven necessary")
-    lines.append("")
-    lines.append("**4. Iterate, Don't Orchestrate**")
-    lines.append("- Make the smallest change that moves toward the goal")
-    lines.append("- Test it, validate it, then decide next step")
-    lines.append('- Avoid "grand designs" that anticipate every future need')
-    lines.append("")
-    lines.append("### Ask Yourself:")
-    lines.append("")
-    lines.append(
-        '- "Am I solving the stated problem, or am I solving problems I imagine might exist?"'
-    )
-    lines.append('- "Could this work with less code, fewer files, fewer abstractions?"')
-    lines.append(
-        '- "Am I building this because I see it\'s needed elsewhere, or because I think it might be?"'
-    )
-    lines.append('- "If I do nothing but the minimum, what actually breaks?"')
-    lines.append("")
-    lines.append("### Warning Signs:")
-    lines.append("")
-    lines.append("- Creating infrastructure before concrete implementation")
-    lines.append('- Building for "flexibility" when requirements are clear and specific')
-    lines.append('- Adding indirection layers "in case we need to swap implementations"')
-    lines.append("- Spending more time on architecture diagrams than code")
-    lines.append("- Documentation longer than implementation")
-    lines.append("")
-    lines.append(
-        "**Remember:** Architecture emerges from working code. Start simple, refactor when patterns become clear."
-    )
-    lines.append("")
-    lines.append("---")
     lines.append("**Next steps:**")
-    lines.append("- `/q <query>` — find implementations of specific concepts mentioned above")
-    lines.append("- Read only the files listed under 'Key Files'")
-    lines.append("- Do NOT do broad grep/glob searches — the scoping already did discovery")
+    lines.append("- `/q <query>` — semantic search for specific concepts mentioned above")
+    lines.append("- Read the files listed under 'Key Files'")
+    lines.append("- Use the dependency map to understand ripple effects")
 
     return "\n".join(lines)
 

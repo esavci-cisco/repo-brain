@@ -470,8 +470,8 @@ class OpenCodeTokenTracker:
         repo_brain_stats = aggregate(repo_brain_results)
         regular_stats = aggregate(regular_results)
 
-        # Calculate improvements
-        token_reduction = (
+        # Calculate differences (positive = repo-brain uses less, negative = repo-brain uses more)
+        token_diff = (
             (regular_stats["avg_tokens_per_task"] - repo_brain_stats["avg_tokens_per_task"])
             / regular_stats["avg_tokens_per_task"]
             * 100
@@ -479,7 +479,7 @@ class OpenCodeTokenTracker:
             else 0
         )
 
-        cost_reduction = (
+        cost_diff = (
             (regular_stats["avg_cost_per_task"] - repo_brain_stats["avg_cost_per_task"])
             / regular_stats["avg_cost_per_task"]
             * 100
@@ -487,7 +487,7 @@ class OpenCodeTokenTracker:
             else 0
         )
 
-        time_reduction = (
+        time_diff = (
             (regular_stats["avg_duration"] - repo_brain_stats["avg_duration"])
             / regular_stats["avg_duration"]
             * 100
@@ -498,10 +498,10 @@ class OpenCodeTokenTracker:
         return {
             "repo_brain": repo_brain_stats,
             "regular": regular_stats,
-            "improvements": {
-                "token_reduction_percent": token_reduction,
-                "cost_reduction_percent": cost_reduction,
-                "time_reduction_percent": time_reduction,
+            "differences": {
+                "token_diff_percent": token_diff,
+                "cost_diff_percent": cost_diff,
+                "time_diff_percent": time_diff,
             },
             "raw_results": {
                 "repo_brain": repo_brain_results,
