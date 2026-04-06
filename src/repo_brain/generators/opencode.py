@@ -174,20 +174,41 @@ def generate_opencode_files(config: RepoConfig) -> dict[str, Path]:
 
 
 def _patch_opencode_json(opencode_json_path: Path) -> None:
-    """Ensure opencode.json exists for repo-brain commands.
+    """Ensure opencode.json exists and adds architecture.md to instructions if present.
 
-    NOTE: repo-brain files are NOT added to the instructions array.
-    The repomap is NOT auto-loaded to avoid token waste (it would be sent
+    NOTE: The repomap is NOT auto-loaded to avoid token waste (it would be sent
     with every message). Instead, users should use /scope or /q commands
-    for on-demand context injection, which is 48% faster and uses 66% fewer tokens.
+    for on-demand context injection.
 
-    This function just ensures opencode.json exists; it doesn't modify instructions.
+    However, architecture.md IS auto-loaded if it exists, because it provides
+    persistent structural awareness at a reasonable token cost (~2K tokens).
     """
-    if not opencode_json_path.exists():
-        # Create minimal opencode.json if it doesn't exist
+    # Load or create opencode.json
+    if opencode_json_path.exists():
+        try:
+            data = json.loads(opencode_json_path.read_text())
+        except json.JSONDecodeError:
+            logger.warning("Invalid JSON in %s, creating new config", opencode_json_path)
+            data = {"instructions": []}
+    else:
         data = {"instructions": []}
-        opencode_json_path.write_text(json.dumps(data, indent=2) + "\n")
         logger.info("Created %s", opencode_json_path)
+
+    # Add architecture.md to instructions if it exists and isn't already listed
+    arch_path = ".repo-brain/architecture.md"
+    repo_root = opencode_json_path.parent
+    arch_file = repo_root / arch_path
+
+    if arch_file.exists():
+        instructions = data.get("instructions", [])
+        if arch_path not in instructions:
+            # Add at the beginning for maximum visibility
+            instructions.insert(0, arch_path)
+            data["instructions"] = instructions
+            logger.info("Added %s to opencode.json instructions", arch_path)
+
+    # Write back
+    opencode_json_path.write_text(json.dumps(data, indent=2) + "\n")
 
 
 def _ensure_gitignore(repo_root: Path, entry: str) -> None:

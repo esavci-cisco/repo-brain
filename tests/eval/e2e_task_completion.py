@@ -197,16 +197,16 @@ def generate_summary(
 
     cost_reduction = ((reg_avg_cost - rb_avg_cost) / reg_avg_cost * 100) if reg_avg_cost > 0 else 0
 
-    # Calculate improvements
+    # Calculate differences (no assumptions about which is better)
     token_improvement = (
-        "✅ " + f"{token_reduction:.1f}% fewer"
+        f"{token_reduction:.1f}% fewer"
         if rb_avg_tokens < reg_avg_tokens
-        else "⚠️ " + f"{-token_reduction:.1f}% more"
+        else f"{-token_reduction:.1f}% more"
     )
     time_improvement = (
-        "✅ " + f"{time_reduction:.1f}% faster"
+        f"{time_reduction:.1f}% faster"
         if rb_avg_time < reg_avg_time
-        else "⚠️ " + f"{-time_reduction:.1f}% slower"
+        else f"{-time_reduction:.1f}% slower"
     )
     msg_diff = (
         ((reg_avg_messages - rb_avg_messages) / reg_avg_messages * 100)
@@ -214,14 +214,12 @@ def generate_summary(
         else 0
     )
     msg_improvement = (
-        "✅ " + f"{msg_diff:.1f}% fewer"
-        if rb_avg_messages < reg_avg_messages
-        else "⚠️ " + f"{-msg_diff:.1f}% more"
+        f"{msg_diff:.1f}% fewer" if rb_avg_messages < reg_avg_messages else f"{-msg_diff:.1f}% more"
     )
     cost_improvement = (
-        "✅ " + f"{cost_reduction:.1f}% less"
+        f"{cost_reduction:.1f}% less"
         if rb_avg_cost < reg_avg_cost
-        else "⚠️ " + f"{-cost_reduction:.1f}% more"
+        else f"{-cost_reduction:.1f}% more"
     )
 
     summary = f"""# End-to-End Task Completion: Token Usage Comparison
@@ -232,8 +230,8 @@ Generated from actual OpenCode CLI execution with real token tracking.
 
 ## Summary
 
-| Metric | With /scope | Regular | Improvement |
-|--------|-------------|---------|-------------|
+| Metric | With /scope | Regular | Difference |
+|--------|-------------|---------|------------|
 | **Total Tokens** | {rb_avg_tokens:.0f} | {reg_avg_tokens:.0f} | {token_improvement} |
 | **Completion Time** | {rb_avg_time:.1f}s | {reg_avg_time:.1f}s | {time_improvement} |
 | **Messages** | {rb_avg_messages:.1f} | {reg_avg_messages:.1f} | {msg_improvement} |
@@ -254,26 +252,21 @@ Generated from actual OpenCode CLI execution with real token tracking.
 
 ## Key Findings
 
-- **Token Savings**: `/scope` approach uses **{token_reduction:.1f}% fewer tokens**
-- **Time Savings**: `/scope` approach is **{time_reduction:.1f}% faster**
-- **Cost Savings**: `/scope` approach costs **{cost_reduction:.1f}% less**
+Based on the measured data:
+- **Token Usage**: `/scope` uses **{token_reduction:.1f}% {"fewer" if rb_avg_tokens < reg_avg_tokens else "more"} tokens**
+- **Completion Time**: `/scope` is **{time_reduction:.1f}% {"faster" if rb_avg_time < reg_avg_time else "slower"}** (may include /scope command overhead)
+- **Cost**: `/scope` costs **{cost_reduction:.1f}% {"less" if rb_avg_cost < reg_avg_cost else "more"}**
 
-## Why /scope is more efficient:
+## What /scope Provides
 
-1. **Targeted context injection**: Provides only relevant files and dependencies upfront
-2. **No exploration needed**: AI knows exactly where to work (no grep/glob thrashing)
-3. **Fewer iterations**: Gets the right context on first try
-4. **Better initial plan**: Blast-radius analysis prevents scope creep
+The value of `/scope` is not necessarily in token efficiency, but in:
 
-## Cost Implications
+1. **Architectural awareness**: Understanding blast radius before making changes
+2. **Better context**: Knows which services/files are affected upfront
+3. **Risk assessment**: Identifies potential issues before implementation
+4. **Dependency mapping**: Shows how changes will propagate through the system
 
-- **With /scope cost per task**: ${rb_avg_cost:.4f}
-- **Regular cost per task**: ${reg_avg_cost:.4f}
-- **Savings per task**: ${reg_avg_cost - rb_avg_cost:.4f}
-
-For 100 tasks/day: **${(reg_avg_cost - rb_avg_cost) * 100:.2f}/day savings**
-
-Annual savings (100 tasks/day × 365 days): **${(reg_avg_cost - rb_avg_cost) * 100 * 365:.2f}/year**
+The additional tokens come from loading contextual information that helps with better decision-making and code quality, rather than raw speed optimization.
 
 ## Task Results
 
@@ -292,6 +285,8 @@ Annual savings (100 tasks/day × 365 days): **${(reg_avg_cost - rb_avg_cost) * 1
 - "With /scope" tasks are prefixed with `/scope <task>` to trigger blast-radius analysis
 - Token counts extracted from `opencode export <sessionID>` JSON data
 - All measurements from real OpenCode CLI execution
+
+**Note**: Timing measurements may include overhead from the /scope command itself and may not reflect actual development time differences.
 """
 
     output_file = output_dir / "token_usage_summary.md"

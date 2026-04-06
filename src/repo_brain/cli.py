@@ -363,6 +363,145 @@ def generate_opencode(repo: str | None) -> None:
         click.echo(f"  {desc}: {path}")
 
 
+@cli.command("generate-architecture")
+@click.option("--repo", "-r", default=None, help="Repo name or path")
+def generate_architecture(repo: str | None) -> None:
+    """Generate architecture.md summary from repo map and dependency graph."""
+    config = _resolve_config(repo)
+    if not config:
+        raise SystemExit(1)
+
+    from pathlib import Path
+
+    from repo_brain.storage.graph_store import GraphStore
+
+    repo_root = Path(config.path)
+    arch_path = repo_root / ".repo-brain" / "architecture.md"
+
+    # Check if it already exists
+    if arch_path.exists():
+        click.echo(f"Architecture summary already exists at: {arch_path}")
+        if not click.confirm("Regenerate it?"):
+            return
+
+    click.echo(f"Generating architecture summary for: {config.name}")
+
+    # Build the summary from available sources
+    lines = ["# Repository Architecture", "", "## Overview"]
+
+    # Add basic repo info
+    lines.append(f"This repository ({config.name}) contains the codebase tracked by repo-brain.")
+    lines.append("")
+
+    # Add dependency graph info if available
+    try:
+        graph = GraphStore(config)
+        nodes = graph.get_all_nodes()
+        if nodes:
+            lines.append("## Services & Components")
+            lines.append("")
+
+            # Group by type
+            services = [n for n in nodes if n.get("node_type") == "service"]
+            libraries = [n for n in nodes if n.get("node_type") == "library"]
+            others = [n for n in nodes if n.get("node_type") not in ("service", "library")]
+
+            if services:
+                lines.append("**Services:**")
+                for node in services[:50]:  # Limit to 50
+                    name = node.get("name", "")
+                    desc = node.get("description", "")
+                    if desc:
+                        lines.append(f"- `{name}`: {desc}")
+                    else:
+                        lines.append(f"- `{name}`")
+                lines.append("")
+
+            if libraries:
+                lines.append("**Libraries:**")
+                for node in libraries[:20]:  # Limit to 20
+                    name = node.get("name", "")
+                    desc = node.get("description", "")
+                    if desc:
+                        lines.append(f"- `{name}`: {desc}")
+                    else:
+                        lines.append(f"- `{name}`")
+                lines.append("")
+
+            if others:
+                lines.append("**Other Components:**")
+                for node in others[:20]:
+                    name = node.get("name", "")
+                    ntype = node.get("node_type", "unknown")
+                    lines.append(f"- `{name}` ({ntype})")
+                lines.append("")
+
+            lines.append("## Dependencies")
+            lines.append("")
+            lines.append(
+                "Key dependencies identified from compose.yml, pyproject.toml, and proto files:"
+            )
+            lines.append("")
+
+            # Show a few examples with dependencies
+            for node in nodes[:10]:
+                name = node.get("name", "")
+                upstream = graph.get_upstream(name, depth=1)
+                downstream = graph.get_downstream(name, depth=1)
+
+                if upstream or downstream:
+                    lines.append(f"**{name}**:")
+                    if upstream:
+                        up_names = [u["name"] for u in upstream[:5]]
+                        lines.append(f"  - Depends on: {', '.join(up_names)}")
+                    if downstream:
+                        down_names = [d["name"] for d in downstream[:5]]
+                        lines.append(f"  - Used by: {', '.join(down_names)}")
+                    lines.append("")
+
+    except Exception as e:
+        lines.append("(Dependency graph not available)")
+        lines.append("")
+        click.echo(f"  Warning: Could not load dependency graph: {e}", err=True)
+
+    # Add note about repo map
+    repomap_path = repo_root / ".repo-brain" / "repomap.md"
+    if repomap_path.exists():
+        lines.append("## Code Structure")
+        lines.append("")
+        lines.append("See `.repo-brain/repomap.md` for detailed file structure and symbols.")
+        lines.append("")
+
+    # Add usage note
+    lines.append("## Using This Repository")
+    lines.append("")
+    lines.append("This summary is loaded into OpenCode on every session to provide")
+    lines.append("persistent structural awareness. Use the following commands:")
+    lines.append("")
+    lines.append("- `/q <query>` — semantic code search")
+    lines.append("- `/scope <task>` — blast-radius analysis for tasks")
+    lines.append("")
+    lines.append(
+        "*Note: Run `/summarize` in OpenCode to regenerate this file with more detailed analysis.*"
+    )
+
+    # Write the file
+    arch_path.parent.mkdir(parents=True, exist_ok=True)
+    content = "\n".join(lines)
+    arch_path.write_text(content)
+
+    click.echo(f"  Created: {arch_path}")
+    click.echo(f"  Size: {len(content)} characters")
+
+    # Trigger opencode.json update
+    from repo_brain.generators.opencode import _patch_opencode_json
+
+    opencode_json = repo_root / "opencode.json"
+    if opencode_json.exists():
+        _patch_opencode_json(opencode_json)
+        click.echo(f"  Updated: {opencode_json} (added architecture.md to instructions)")
+
+
 # ── Existing commands ────────────────────────────────────────────────
 
 
@@ -437,20 +576,30 @@ def setup(ctx: click.Context, full: bool, repo: str | None) -> None:
 
     click.echo()
     click.echo("=" * 40)
-    click.echo("Step 4/4: Generating OpenCode integration")
+    click.echo("Step 4/5: Generating OpenCode integration")
     click.echo("=" * 40)
     ctx.invoke(generate_opencode, repo=repo)
 
     click.echo()
-    click.echo("Setup complete. repo-brain is ready.")
+    click.echo("=" * 40)
+    click.echo("Step 5/5: Generating architecture summary")
+    click.echo("=" * 40)
+    ctx.invoke(generate_architecture, repo=repo)
+
     click.echo()
-    click.echo("OpenCode will now:")
-    click.echo("  - Load .repo-brain/repomap.md into every system prompt")
-    click.echo("  - Load .repo-brain/architecture.md if it exists (run /summarize to generate)")
-    click.echo("  - Support /q <query> for semantic code search")
-    click.echo("  - Support /scope <description> for task scoping")
-    click.echo("  - Support /summarize to generate an architectural summary (run once)")
-    click.echo("  - Auto-refresh the repo map on session start")
+    click.echo("=" * 40)
+    click.echo("✓ Setup complete!")
+    click.echo("=" * 40)
+    click.echo()
+    click.echo("OpenCode is now fully configured with persistent repo awareness!")
+    click.echo()
+    click.echo("What's ready:")
+    click.echo("  ✓ Architecture summary (.repo-brain/architecture.md)")
+    click.echo("  ✓ Repo map (auto-refreshes on session start)")
+    click.echo("  ✓ /q <query> — semantic code search")
+    click.echo("  ✓ /scope <task> — blast-radius analysis")
+    click.echo()
+    click.echo("Next: Open OpenCode in this repo to start coding with full context awareness.")
 
 
 @cli.command("build-graph")

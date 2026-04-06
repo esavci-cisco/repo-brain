@@ -16,6 +16,8 @@ import logging
 from collections import Counter
 from typing import Any
 
+from repo_brain.analysis.git_history import GitHistoryAnalyzer
+from repo_brain.analysis.pattern_detector import PatternDetector
 from repo_brain.config import RepoConfig
 from repo_brain.storage.graph_store import GraphStore
 from repo_brain.storage.vector_store import VectorStore
@@ -51,7 +53,12 @@ def scope_task(
         "dependencies": {},
         "risk_assessment": [],
         "suggested_reading_order": [],
+        "intelligence": {},  # New: automatic inference
     }
+
+    # Step 0: Run intelligent analysis (git history + pattern detection)
+    intelligence = _analyze_task_intelligence(description, config, vector_store)
+    result["intelligence"] = intelligence
 
     # Step 1: Semantic search to find relevant code
     search_results = _semantic_search(
@@ -109,6 +116,47 @@ def format_scope_result(result: dict[str, Any]) -> str:
         lines.append(f"**Task**: {desc}")
         lines.append("")
 
+    # Intelligence section (NEW)
+    intelligence = result.get("intelligence", {})
+    if intelligence and intelligence.get("recommendation"):
+        lines.append("### Task Intelligence")
+        lines.append("")
+
+        # Show complexity estimate
+        complexity = intelligence.get("complexity_estimate", "UNKNOWN")
+        if complexity != "UNKNOWN":
+            lines.append(f"**Estimated Complexity**: {complexity}")
+
+        # Show git history analysis
+        git_hist = intelligence.get("git_history")
+        if git_hist:
+            min_files, min_lines = git_hist.get("min_complexity", (0, 0))
+            max_files, max_lines = git_hist.get("max_complexity", (0, 0))
+            median_f = git_hist["median_files_changed"]
+            median_l = git_hist["median_lines_changed"]
+            lines.append(
+                f"**Historical Pattern**: {git_hist['similar_tasks_found']} similar tasks - "
+                f"median {median_f:.0f} files, {median_l:.0f} lines"
+            )
+            lines.append(f"  - Range: {min_files}-{max_files} files, {min_lines}-{max_lines} lines")
+
+        # Show code pattern analysis
+        code_patterns = intelligence.get("code_patterns")
+        if code_patterns and code_patterns.get("pattern_type") != "none":
+            pattern_type = code_patterns["pattern_type"]
+            occurrences = code_patterns["occurrences"]
+            lines.append(f"**Code Pattern**: {occurrences} {pattern_type} implementation(s) exist")
+            if code_patterns.get("locations"):
+                lines.append(f"  - Examples: {', '.join(code_patterns['locations'][:2])}")
+
+        # Show overall recommendation
+        recommendation = intelligence.get("recommendation")
+        if recommendation:
+            lines.append("")
+            lines.append(f"**Recommendation**: {recommendation}")
+
+        lines.append("")
+
     # Affected services
     services = result.get("affected_services", [])
     if services:
@@ -154,15 +202,139 @@ def format_scope_result(result: dict[str, Any]) -> str:
     # Post-call guidance — suggests follow-up actions so the LLM
     # continues using pre-indexed data rather than falling back to grep/glob.
     lines.append("---")
-    lines.append("**Next steps**:")
-    lines.append("- `/q <query>` — find implementations of specific concepts mentioned above")
-    lines.append("- Read only the files listed under 'Key Files to Read'")
-    lines.append("- Do NOT do broad grep/glob searches — the scoping already did discovery")
+    lines.append("## Implementation Note")
+    lines.append("")
+    lines.append("This scope shows the **blast radius** (what might break), not requirements.")
+    lines.append("")
+    lines.append("**Core principles:**")
+    lines.append("- Modify only what's needed to solve the stated problem")
+    lines.append("- Start simple, defer abstraction until patterns emerge")
+    lines.append("- Don't build infrastructure before proving the need")
+    lines.append("")
+    lines.append("**Ask:** Am I solving the stated problem, or problems I imagine might exist?")
+    lines.append("")
+    lines.append("---")
+    lines.append("**Next steps:**")
+    lines.append("- `/q <query>` — semantic search for specific concepts mentioned above")
+    lines.append("- Read the files listed under 'Key Files'")
+    lines.append("- Use the dependency map to understand ripple effects")
 
     return "\n".join(lines)
 
 
 # ── Internal helpers ─────────────────────────────────────────────────
+
+
+def _analyze_task_intelligence(
+    description: str,
+    config: RepoConfig,
+    vector_store: VectorStore | None = None,
+) -> dict[str, Any]:
+    """Automatically analyze task for patterns and historical data.
+
+    Args:
+        description: Task description
+        config: Repository configuration
+        vector_store: Optional vector store instance
+
+    Returns:
+        Dictionary with intelligence analysis
+    """
+    intelligence = {
+        "git_history": None,
+        "code_patterns": None,
+        "complexity_estimate": "UNKNOWN",
+        "recommendation": None,
+    }
+
+    # Git history analysis
+    try:
+        git_analyzer = GitHistoryAnalyzer(config.path)
+        historical_pattern = git_analyzer.analyze_task_history(description, max_commits=50)
+
+        if historical_pattern:
+            intelligence["git_history"] = {
+                "similar_tasks_found": len(historical_pattern.similar_tasks),
+                "median_files_changed": round(historical_pattern.median_files_changed, 1),
+                "median_lines_changed": round(historical_pattern.median_lines_changed, 0),
+                "min_complexity": historical_pattern.min_complexity,
+                "max_complexity": historical_pattern.max_complexity,
+                "recommendation": historical_pattern.recommendation,
+            }
+
+            # Estimate complexity using median (more realistic than average)
+            # Adjusted thresholds based on actual repo patterns
+            if (
+                historical_pattern.median_files_changed <= 3
+                and historical_pattern.median_lines_changed < 300
+            ):
+                intelligence["complexity_estimate"] = "LOW"
+            elif (
+                historical_pattern.median_files_changed <= 8
+                and historical_pattern.median_lines_changed < 1200
+            ):
+                intelligence["complexity_estimate"] = "MEDIUM"
+            else:
+                intelligence["complexity_estimate"] = "HIGH"
+    except Exception as e:
+        logger.debug(f"Git history analysis failed: {e}")
+
+    # Pattern detection
+    try:
+        if vector_store is None:
+            vector_store = VectorStore(config)
+
+        pattern_detector = PatternDetector(config)
+        code_pattern = pattern_detector.detect_similar_patterns(description, top_k=20)
+
+        if code_pattern:
+            intelligence["code_patterns"] = {
+                "pattern_type": code_pattern.pattern_type,
+                "occurrences": code_pattern.count,
+                "locations": code_pattern.locations[:3],  # Top 3
+                "recommendation": code_pattern.recommendation,
+            }
+    except Exception as e:
+        logger.debug(f"Pattern detection failed: {e}")
+
+    # Generate final recommendation
+    recommendations = []
+
+    if intelligence["git_history"]:
+        hist = intelligence["git_history"]
+        min_files, min_lines = hist.get("min_complexity", (0, 0))
+        max_files, max_lines = hist.get("max_complexity", (0, 0))
+        recommendations.append(
+            f"Historical: Median {hist['median_files_changed']} files, "
+            f"{hist['median_lines_changed']} lines "
+            f"(range: {min_files}-{max_files} files, {min_lines}-{max_lines} lines)"
+        )
+
+    if intelligence["code_patterns"]:
+        patterns = intelligence["code_patterns"]
+        if patterns["pattern_type"] == "library" and patterns["occurrences"] >= 3:
+            recommendations.append(
+                f"Pattern: {patterns['occurrences']} library implementations exist - "
+                "consider using existing code"
+            )
+        elif patterns["pattern_type"] == "none" or patterns["occurrences"] == 0:
+            recommendations.append("Pattern: No similar code found - start with inline solution")
+        else:
+            recommendations.append(
+                f"Pattern: {patterns['occurrences']} {patterns['pattern_type']} "
+                "implementations exist"
+            )
+
+    if intelligence["complexity_estimate"] == "LOW":
+        recommendations.append("Complexity: LOW - inline solution recommended")
+    elif intelligence["complexity_estimate"] == "MEDIUM":
+        recommendations.append("Complexity: MEDIUM - consider modular approach")
+    elif intelligence["complexity_estimate"] == "HIGH":
+        recommendations.append("Complexity: HIGH - plan carefully, test thoroughly")
+
+    intelligence["recommendation"] = "; ".join(recommendations) if recommendations else None
+
+    return intelligence
 
 
 def _semantic_search(
